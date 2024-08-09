@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "crafting-interpreters"
+version = "0.1.0"
+description = "implementation of toy programmaing languages"
+authors = ["sasa cocic <cocicsasa@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+py_jilox = { path = "py_jilox", develop = true }
+py_jack = { path = "py_jack", develop = true }
+# TODO: add Ruff
+# TODO: add pytest
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
