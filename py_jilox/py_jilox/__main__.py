@@ -8,6 +8,7 @@ import logging.config
 import os
 import py_jilox.Expr as Expr
 import py_jilox.gen_exprs as gen_exprs
+import py_jilox.parser as parser_mod
 
 
 if typing.TYPE_CHECKING:
@@ -20,7 +21,7 @@ logging.config.dictConfig({
     "version": 1,
     "formatters": {"default": {"format": "[%(levelname)s][%(funcName)s] %(message)s"}},
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
-    "loggers": {"py_jack.scanner": {"level": LOG_LEVEL or logging.DEBUG}},
+    "loggers": {"py_jilox.scanner": {"level": LOG_LEVEL or logging.DEBUG}},
     "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.DEBUG},
 })
 
@@ -74,13 +75,19 @@ def run_prompt():
 
 
 def run(lox_program: str) -> str:
+    LOGGER.debug("running program: %s", lox_program)
     scanner = scan.Scanner(lox_program)
     tokens = scanner.scan_tokens()
-    if errors.had_error:
-        exit(65)  # no idea what 65 is
 
     for token in tokens:
         print(f"token: {token}")
+    parser = parser_mod.Parser(tokens)
+    expressions = parser.parse()
+
+    if errors.had_error or expressions is None:
+        return "there was some error"
+
+    print(AstPrinter().printer(expressions))
     return ""
 
 
@@ -109,7 +116,8 @@ def main():
 
     match len(sys.argv):
         case 1:
-            print("no file passed. Aborting")
+            print("beginning repl")
+            run_prompt()
             exit(1)
         case 2:
             print(f"evaluating file: {sys.argv[1]}")
@@ -124,7 +132,8 @@ def main():
                 # TODO: remove this and function
                 test_ast_printer()
         case _:
-            run_prompt()
+            print("don't know what to do. Too Many arguments.")
+            exit(64)
 
 
 if __name__ == "__main__":

@@ -1,14 +1,9 @@
-"""
-the scanner simply reads in raw text and produces out a list of tokens. Lexemes are not tokens - they are basically just the raw substrings / text - a token also includes additional metadata
-"""
-
 from __future__ import annotations
 import typing
 import py_jilox.error_handling as errors
 
 if typing.TYPE_CHECKING:
     pass
-
 
 import enum
 

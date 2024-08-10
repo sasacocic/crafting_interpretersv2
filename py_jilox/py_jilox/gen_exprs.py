@@ -1,3 +1,7 @@
+"""
+This is simply a script used for generating classes in the Expr.py file.
+"""
+
 from __future__ import annotations
 import sys
 import typing
