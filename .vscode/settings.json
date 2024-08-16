@@ -1,7 +1,0 @@
-{
-  "python.analysis.typeCheckingMode": "basic",
-  "python.analysis.autoImportCompletions": true,
-  "editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
-  "editor.fontSize": 12,
-  "python.analysis.extraPaths": ["py_jilox", "py_jack"]
-}
