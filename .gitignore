@@ -1,7 +1,9 @@
 
 
 
-
+.DS_store
 **.pyc
 .direnv
 .vscode
+
+*.xml

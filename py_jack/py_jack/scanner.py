@@ -2,6 +2,7 @@ import enum
 import typing
 import logging
 import dataclasses
+import pathlib
 
 LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
@@ -32,8 +33,8 @@ class TokenType(enum.Enum):
     TILDE = enum.auto()
 
     # literals
-    STRING_LITERAL = enum.auto()
-    INTEGER_LITERAL = enum.auto()
+    STRING_CONSTANT = enum.auto()
+    INTEGER_CONSTANT = enum.auto()
 
     # keywords
     CLASS = enum.auto()
@@ -178,22 +179,39 @@ class Scanner:
                 self.add_token(TokenType.SEMICOLON)
             case "=":
                 self.add_token(TokenType.EQUAL)
+            case "+":
+                self.add_token(TokenType.PLUS)
             case "-":
                 self.add_token(TokenType.MINUS)
             case "*":
                 self.add_token(TokenType.ASTERISK)
             case "/":
-                LOGGER.debug("comment or division")
                 if not self.at_end() and self.peek() == "/":
-                    LOGGER.debug("Found comment")
+                    LOGGER.debug("Found comment: //")
                     while self.peek() != "\n":
-                        if self.at_end():
-                            break
+                        # if self.at_end():
+                        #     break
                         self.advance()  # we found a comment
-                        if not self.at_end():
-                            LOGGER.debug(
-                                f"now at({self.current}): {self.src[self.current]}"
-                            )
+                    else:
+                        self.advance()  # want to move past the newline
+                elif not self.at_end() and self.peek() == "*":
+                    LOGGER.debug("Found comment: /* or /**")
+                    LOGGER.debug(
+                        f"current: {self.src[self.current]} | peek: {self.peek()}"
+                    )
+                    while not (self.current_char() == "*" and self.peek() == "/"):
+                        self.advance()
+                        LOGGER.debug(
+                            f"advancing: current: {self.src[self.current]} | peek: {self.peek()}"
+                        )
+                    else:
+                        LOGGER.debug("advancing end")
+                        self.advance()  # move past *
+                        self.advance()  # move past /
+
+                    LOGGER.debug(
+                        f"DONE: current: {self.src[self.current]} | peek: {self.peek()}"
+                    )
                 else:
                     LOGGER.debug("Found division")
                     self.add_token(TokenType.FORWARD_SLASH)
@@ -216,6 +234,7 @@ class Scanner:
             case "\n":
                 self.line += 1
             case _:
+                LOGGER.debug("DEFAULT CASE")
                 # pretty sure this is a problem. would parse some thing like 1234hello as an identifier - which actually maybe ok?
                 if c.isdigit():
                     # looking at a integer constant
@@ -231,6 +250,9 @@ class Scanner:
     def can_peek(self):
         return (self.current + 1) <= len(self.src) - 1
 
+    def current_char(self):
+        return self.src[self.current]
+
     def peek(self):
         if (self.current + 1) <= len(self.src) - 1:
             return self.src[self.current + 1]
@@ -241,10 +263,8 @@ class Scanner:
         else:
             self.advance()  # want current to be equal to "
 
-        text = self.src[
-            self.start : self.current + 1
-        ]  # +1 because I want the ending quote right?
-        self.add_token(TokenType.STRING_LITERAL, lexeme=text)
+        text = self.src[self.start + 1 : self.current]  # don't want ""
+        self.add_token(TokenType.STRING_CONSTANT, lexeme=text)
 
     def ident_or_keyword(self):
         """
@@ -273,4 +293,44 @@ class Scanner:
             self.advance()
         # parses digit and creates digit token
         lexeme = self.src[self.start : self.current + 1]
-        self.add_token(TokenType.INTEGER_LITERAL, lexeme)
+        self.add_token(TokenType.INTEGER_CONSTANT, lexeme)
+
+    def write_xml(self, path: str = "output.xml"):
+        """
+        creates XML representation of tokens
+        """
+        p = pathlib.Path(path)
+        open_option = "w"
+        if not p.exists():
+            open_option = "x"
+        with p.open(open_option) as f:
+            # f.write(f"this: {random.randint(1, 100)}")
+            l = ["<tokens>\n"]
+            for token in self.tokens:
+                s = None
+                if token.token_type in self.keywords.values():
+                    s = f"<keyword> {token.lexeme} </keyword>\n"
+                elif "constant" in token.token_type.name.lower():
+                    if token.token_type == TokenType.STRING_CONSTANT:
+                        s = f"<stringConstant> {token.lexeme} </stringConstant>\n"
+                    else:
+                        s = f"<integerConstant> {token.lexeme} </integerConstant>\n"
+
+                elif "identifier" in token.token_type.name.lower():
+                    s = f"<identifier> {token.lexeme} </identifier>\n"
+                else:
+                    lexeme = token.lexeme
+                    match lexeme:
+                        case "<":
+                            lexeme = "&lt;"
+                        case ">":
+                            lexeme = "&gt;"
+                        case '"':
+                            lexeme = "&quot;"
+                        case "&":
+                            lexeme = "&amp;"
+                    s = f"<symbol> {lexeme} </symbol>\n"
+                l.append(s)
+            else:
+                l.append("</tokens>\n")
+            f.writelines(l)
