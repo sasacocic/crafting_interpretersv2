@@ -23,23 +23,15 @@ logging.config.dictConfig({
 LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
 
-"""
-TODO: I need to double check how protocols work in python. Also, not really sure
-what that I buying me here? It just seems like it's defining some attributes.
-"""
-
-
-def repl():
+def _repl():
     """
     starts a repl and executes code.
     """
-
     # TODO: catch ctrl-c signal
-    print("py_jack repl has started!")
-
+    print("py_jack repl has started! type 'exit' to exit the repl")
     while True:
         code = sys.stdin.readline()
-        if code == "exit":
+        if code.strip() == "exit":
             break
         scanner = scan.Scanner(code)
         scanner.scan()
@@ -73,13 +65,11 @@ def scanner(file_path, output_file):
 @click.command()
 def parser():
     click.echo("parser")
-    input_iter = iter(sys.argv)
-    next(input_iter)  # discard file name as I don't use it for anything
 
 
 @click.command()
 def repl():
-    repl()
+    _repl()
 
 
 if __name__ == "__main__":
