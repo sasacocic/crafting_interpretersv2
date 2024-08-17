@@ -229,12 +229,12 @@ class Scanner:
                 self.add_token(TokenType.TILDE)
             case '"':
                 self.string()
-            case "" | " ":
+            case "" | " " | "\t":
                 pass
             case "\n":
                 self.line += 1
             case _:
-                LOGGER.debug("DEFAULT CASE")
+                LOGGER.debug("DEFAULT CASE: %s", c)
                 # pretty sure this is a problem. would parse some thing like 1234hello as an identifier - which actually maybe ok?
                 if c.isdigit():
                     # looking at a integer constant
