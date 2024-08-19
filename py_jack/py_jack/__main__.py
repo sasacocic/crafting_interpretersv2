@@ -1,11 +1,13 @@
 from __future__ import annotations
 import pathlib as pl
 import py_jack.scanner as scan
+import py_jack.parser as parse
 import logging.config
 import typing
 import sys
 import os
 import click
+import pathlib
 
 
 LOG_LEVEL: typing.Final[str | None] = os.environ.get("LOG_LEVEL")
@@ -16,7 +18,10 @@ logging.config.dictConfig({
         "default": {"format": "[%(levelname)s][%(funcName)s:%(lineno)d] %(message)s"}
     },
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
-    "loggers": {"py_jack.scanner": {"level": LOG_LEVEL or logging.DEBUG}},
+    "loggers": {
+        "py_jack.scanner": {"level": LOG_LEVEL or logging.DEBUG},
+        "py_jack.parser": {"level": LOG_LEVEL or logging.DEBUG},
+    },
     "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.DEBUG},
 })
 
@@ -33,11 +38,19 @@ def _repl():
         code = sys.stdin.readline()
         if code.strip() == "exit":
             break
+        # TODO: could put this in a try catch
         scanner = scan.Scanner(code)
         scanner.scan()
         LOGGER.debug("scanning complete. Spitting out tokens.")
         for token in scanner.tokens:
             LOGGER.debug(token)
+        LOGGER.debug("----------------------- TOKEN END -----------------------")
+        LOGGER.debug("parser")
+        parser = parse.Parser(scanner.tokens)
+        parse_result = parser.parse()
+
+        xml_file = pathlib.Path("output.xml")
+        parse_result.write_xml(xml_file, 1)
     print("Exiting. Thanks for using the repl!")
 
 
