@@ -63,6 +63,24 @@ class TokenType(enum.Enum):
     IDENTIFIER = enum.auto()
 
 
+type_tokens = set([
+    TokenType.INT,
+    TokenType.CHAR,
+    TokenType.IDENTIFIER,
+    TokenType.BOOLEAN,
+])
+
+
+literals = set((
+    TokenType.INTEGER_CONSTANT,
+    TokenType.STRING_CONSTANT,
+    TokenType.TRUE,
+    TokenType.FALSE,
+    TokenType.NULL,
+    TokenType.THIS,
+))
+
+
 class Keywords(enum.StrEnum):
     CLASS = "class"
     CONSTRUCTOR = "constructor"
@@ -271,7 +289,7 @@ class Scanner:
         parses the string and determines if it's an identifier or keyword
         """
         cur = self.peek()
-        while cur.isalnum() and self.can_peek():
+        while cur is not None and cur.isalnum() and self.can_peek():
             self.advance()
             cur = self.peek()
 

@@ -5,6 +5,7 @@ import logging
 import itertools
 import pathlib
 import typing
+import dataclasses
 
 LOGGER = logging.getLogger(__name__)
 
@@ -94,6 +95,14 @@ class SubroutineDec(XmlWriter):
     subroutine_body: None = None
 
 
+@dataclasses.dataclass
+class ParameterList(XmlWriter):
+    parameters: list[tuple[scanner.Token, scanner.Token]]
+
+    def write_xml(self, file: pathlib.IO, indent: int = 0):
+        raise NotImplementedError("not working yet")
+
+
 class Parser:
     """
     recursive descent parser
@@ -118,7 +127,9 @@ class Parser:
         really dumb solution that just clones and then returns top of the iterator
         """
 
-        top = next(self.token_iter)
+        top = next(self.token_iter, None)
+        if top is None:
+            return top
         new_iter = itertools.chain([top], self.token_iter)
         self.token_iter = new_iter
         return top
@@ -172,7 +183,36 @@ class Parser:
         return cvd
 
     def parse_subroutine_dec(self):
+        dec_type = self._next()
+        routine_name = self._next()
+
+        left_paren = self._next()
+        parameter_list = self.parse_parameter_list()
+        right_paren = self._next()
+
+        routine_body = self.parse_subroutine_body()
+
         return ""  # TODO: actually need to finish this
+
+    def parse_parameter_list(self) -> ParameterList:
+        type_var_name = []
+
+        # TODO: why am I not using parse type here????
+        while self._peek() and self._peek().token_type in scanner.type_tokens:
+            type_ = self._next()
+            var_name = self._next()
+            assert var_name.token_type == scanner.TokenType.IDENTIFIER
+            type_var_name.append((type_, var_name))
+            if self._peek() and self._peek().token_type == scanner.TokenType.COMMA:
+                self._next()
+        else:
+            LOGGER.debug("parameter_list ending with: %s", self._peek())
+
+        return ParameterList(parameters=type_var_name)
+
+    def parse_subroutine_body(self):
+        left_squerly = self._next()
+        # TODO: implement statements - for now why not just implement one statement?
 
     def parse_type(self):
         token = self._next()
@@ -197,3 +237,12 @@ class Parser:
             raise Exception(f"{token} - not valid. Needs to be an identifier")
 
         return token
+
+    # statment parsing
+
+    def parse_constant(self):
+        constant = self._next()
+
+        assert constant.token_type in scanner.literals
+
+        return constant
