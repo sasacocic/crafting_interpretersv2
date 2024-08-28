@@ -3,6 +3,7 @@ import typing
 import logging
 import dataclasses
 import pathlib
+import re
 
 LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
@@ -79,6 +80,29 @@ literals = set((
     TokenType.NULL,
     TokenType.THIS,
 ))
+
+
+operations = set([
+    TokenType.PLUS,
+    TokenType.MINUS,
+    TokenType.ASTERISK,
+    TokenType.FORWARD_SLASH,
+    TokenType.AMPERSAND,
+    TokenType.PIPE,
+    TokenType.LESS_THAN,
+    TokenType.GREATER_THAN,
+    TokenType.EQUAL,
+])
+
+keyword_constants = set([
+    TokenType.TRUE,
+    TokenType.FALSE,
+    TokenType.NULL,
+    TokenType.THIS,
+])
+
+
+unary_op = set([TokenType.MINUS, TokenType.TILDE])
 
 
 class Keywords(enum.StrEnum):
@@ -257,7 +281,8 @@ class Scanner:
                 if c.isdigit():
                     # looking at a integer constant
                     self.integer_constant(c)
-                elif c.isalpha():
+                # elif c.isalpha():
+                elif re.match(r"[a-zA-Z_]", c):
                     # we must be looking at an identifier or keyword?
                     # maximal munch - that means the longer of the two is what the thing becomes
                     self.ident_or_keyword()
@@ -289,7 +314,7 @@ class Scanner:
         parses the string and determines if it's an identifier or keyword
         """
         cur = self.peek()
-        while cur is not None and cur.isalnum() and self.can_peek():
+        while cur is not None and re.match(r"[a-zA-Z0-9_]", cur) and self.can_peek():
             self.advance()
             cur = self.peek()
 

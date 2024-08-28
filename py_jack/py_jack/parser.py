@@ -6,6 +6,7 @@ import itertools
 import pathlib
 import typing
 import dataclasses
+import functools
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,7 +100,52 @@ class SubroutineDec(XmlWriter):
 class ParameterList(XmlWriter):
     parameters: list[tuple[scanner.Token, scanner.Token]]
 
-    def write_xml(self, file: pathlib.IO, indent: int = 0):
+    def write_xml(self, file: typing.IO, indent: int = 0):
+        raise NotImplementedError("not working yet")
+
+
+@dataclasses.dataclass
+class Expression(XmlWriter):
+    term: Term
+    op_terms: list[tuple[scanner.Token, Term]]
+
+    def write_xml(self, file: typing.IO, indent: int = 0):
+        raise NotImplementedError("not working yet")
+
+
+@dataclasses.dataclass
+class Term(XmlWriter):
+    # terms: scanner.Token | ArrayOperation | subroutineCall | '(' expression ')' | expressionList
+    term: (
+        scanner.Token
+        | tuple[scanner.Token, Term]
+        | tuple[scanner.Token, Expression, scanner.Token]
+        | tuple[scanner.Token, scanner.Token, Expression, scanner.Token]
+        | SubroutineCall
+    )
+
+    def write_xml(self, file: typing.IO, indent: int = 0):
+        raise NotImplementedError("not working yet")
+
+
+@dataclasses.dataclass
+class ExpressionList(XmlWriter):
+    expression: Expression | None = None
+    expression_list: list[Expression] | None = None
+
+    def write_xml(self, file: typing.IO, indent: int = 0):
+        raise NotImplementedError("not working yet")
+
+
+@dataclasses.dataclass
+class SubroutineCall(XmlWriter):
+    subroutine_name: scanner.Token
+    subroutine_source: scanner.Token | None = None
+    expression_list: ExpressionList = dataclasses.field(
+        default_factory=lambda: ExpressionList()
+    )
+
+    def write_xml(self, file: typing.IO, indent: int = 0):
         raise NotImplementedError("not working yet")
 
 
@@ -112,7 +158,7 @@ class Parser:
     token_iter: Iterator[scanner.Token]
 
     def __init__(self, tokens: list[scanner.Token]) -> None:
-        LOGGER.debug("starting to parse")
+        LOGGER.debug("begin parsing with tokens: %s", tokens)
         self.tokens = tokens
         self.token_iter = iter(self.tokens)
 
@@ -246,3 +292,148 @@ class Parser:
         assert constant.token_type in scanner.literals
 
         return constant
+
+    # expression parsing
+
+    def expression(self):
+        LOGGER.debug(f"expression:tokens: {self.tokens}")
+        term = self.term()
+        ops_and_terms = []
+        while (top := self._peek()) and top.token_type in scanner.operations:
+            ops_and_terms.append((self.op(), self.term()))
+        return Expression(term=term, op_terms=ops_and_terms)
+
+    def term(self) -> Term:
+        LOGGER.debug(f"term:tokens: {self.tokens}")
+        top = self._peek()
+        matcher = top.token_type if top else None
+        match matcher:
+            case scanner.TokenType.STRING_CONSTANT:
+                return Term(term=self.string_constant())
+            case scanner.TokenType.INTEGER_CONSTANT:
+                return Term(term=self.integer_constant())
+            case token if token in scanner.keyword_constants:
+                return Term(term=self.keyword_constant())
+            case scanner.TokenType.LEFT_PAREN:
+                left_paren = self._next()
+                expression = self.expression()
+                right_paren = self._next()
+                if right_paren.token_type != scanner.TokenType.RIGHT_PAREN:
+                    raise Exception("expected right paren - didn't recieve")
+                return Term(term=(left_paren, expression, right_paren))
+            case tok if tok in scanner.unary_op:
+                unary = self.unary_op()
+                term = self.term()
+                return Term(term=(unary, term))
+            case scanner.TokenType.IDENTIFIER:
+                ident = self._next()
+                LOGGER.debug(f"peeking: {self._peek()}")
+                peek_result = self._peek()
+                matcher = peek_result.token_type if peek_result else None
+                match matcher:
+                    case scanner.TokenType.LEFT_SQUARE_BRACKET:
+                        # varName'[' expression ']'
+                        LOGGER.debug("matched array index expression")
+                        left_square_bracket = self._next()
+                        expression = self.expression()
+                        right_square_bracket = self._next()
+                        return Term(
+                            term=(
+                                ident,
+                                left_square_bracket,
+                                expression,
+                                right_square_bracket,
+                            )
+                        )
+                    case scanner.TokenType.LEFT_PAREN | scanner.TokenType.DOT:
+                        subroutine = self.subroutine_call(sub_name=ident)
+                        return Term(term=subroutine)
+                    case _:
+                        LOGGER.debug("creating ident: %s", ident)
+                        return Term(term=ident)
+            case _:
+                raise Exception("term did not match any rule")
+
+    def unary_op(self):
+        if self._peek().token_type not in scanner.unary_op:
+            raise Exception(f"Expected a unary operator got {self._peek().token_type}")
+
+        return self._next()
+
+    def op(self):
+        if self._peek().token_type not in scanner.operations:
+            raise Exception(f"Expected a operator got {self._peek().token_type}")
+
+        return self._next()
+
+    def keyword_constant(self):
+        if self._peek().token_type not in scanner.keyword_constants:
+            raise Exception(f"Expected keyword constant got {self._peek().token_type}")
+
+        return self._next()
+
+    def integer_constant(self):
+        if self._peek().token_type != scanner.TokenType.INTEGER_CONSTANT:
+            raise Exception(f"Expected integer constant got {self._peek().token_type}")
+
+        return self._next()
+
+    def string_constant(self):
+        if self._peek().token_type != scanner.TokenType.STRING_CONSTANT:
+            raise Exception(f"Expected string constant got {self._peek().token_type}")
+
+        return self._next()
+
+    def subroutine_call(self, sub_name):
+        # figure out how this will work with term... it will start from (
+        top = self._peek()
+        matcher = top.token_type if top else None
+        match matcher:
+            case scanner.TokenType.DOT:
+                dot = self._next()
+                subroutine_name = self._next()
+                # left_paren = self._next()
+                expression_list = self.expression_list()
+                right_paren = self._next()
+                return SubroutineCall(
+                    subroutine_source=sub_name,
+                    subroutine_name=subroutine_name,
+                    expression_list=expression_list,
+                )
+            case scanner.TokenType.LEFT_PAREN:
+                # left_paren = self._next()
+                expression_list = self.expression_list()
+                right_paren = self._next()
+                return SubroutineCall(
+                    subroutine_name=sub_name, expression_list=expression_list
+                )
+            case _:
+                raise Exception("should never happen")
+
+    def expression_list(self):
+        LOGGER.debug(("-----" * 8) + "[expression_list]" + ("-----" * 8))
+        left_paren = self._next()
+        if left_paren.token_type != scanner.TokenType.LEFT_PAREN:
+            raise Exception("Expected ( but got %s", left_paren)
+        token = self._peek()
+        matcher = token.token_type if token else None
+        match matcher:
+            case scanner.TokenType.RIGHT_PAREN:
+                self._next()
+                return ExpressionList()
+            case _:
+                expression = self.expression()
+                expressions = []
+                while (
+                    top := self._peek()
+                ) and top.token_type == scanner.TokenType.COMMA:
+                    comma = self._next()
+                    next_expression = self.expression()
+                    expressions.append((comma, next_expression))
+
+                return ExpressionList(
+                    expression=expression,
+                    expression_list=functools.reduce(
+                        lambda acc, val: acc + [val[1]], expressions, []
+                    ),
+                )
