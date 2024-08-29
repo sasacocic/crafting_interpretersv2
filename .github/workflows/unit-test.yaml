@@ -1,0 +1,9 @@
+on: push
+
+jobs:
+  run-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo 'pwd'
+        working-directory: py_jack
