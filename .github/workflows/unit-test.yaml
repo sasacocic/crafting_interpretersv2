@@ -9,5 +9,6 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: |
           nix --version
+          nix develop --command poetry install
           nix develop --command pytest -vv --capture=tee-sys --log-level=DEBUG
         working-directory: py_jack
