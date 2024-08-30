@@ -13,6 +13,13 @@ class XmlWriter(typing.Protocol):
             file.write(f"{' ' * indent}<keyword> {token.lexeme} </keyword>\n")
         elif token.token_type in scanner.token_variants["symbols"]:
             file.write(f"{' ' * indent}<symbol> {token.lexeme} </symbol>\n")
+        elif token.token_type in [
+            scanner.TokenType.INTEGER_CONSTANT,
+            scanner.TokenType.STRING_CONSTANT,
+        ]:
+            tag = token.token_type.name.lower().split("_")
+            new_tag = "".join([tag[0], tag[1][0].upper() + tag[1][1:]])
+            file.write(f"{' ' * indent}<{new_tag}> {token.lexeme} </{new_tag}>\n")
         else:
             file.write(
                 f"{' ' * indent}<{token.token_type.name.lower()}> {token.lexeme} </{token.token_type.name.lower()}>\n"
@@ -154,7 +161,15 @@ class VarDec(XmlWriter):
     semi_colon: scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int):
-        raise NotImplementedError("not implemented")
+        with self.write_node(file, indent):
+            indent += 2
+            self.write_token(self.var_kw, file, indent)
+            self.write_token(self._type, file, indent)
+            self.write_token(self.var_name, file, indent)
+            for comma, var_name in self.var_names:
+                self.write_token(comma, file, indent)
+                self.write_token(var_name, file, indent)
+            self.write_token(self.semi_colon, file, indent)
 
 
 @dataclasses.dataclass
@@ -165,9 +180,14 @@ class SubroutineBody(XmlWriter):
     right_squerly: scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int):
-        # TODO: stopped here
         with self.write_node(file, indent):
-            pass
+            indent += 2
+            self.write_token(self.left_squerly, file, indent)
+            for var_dec in self.var_decs:
+                var_dec.write_xml(file, indent)
+            for statement in self.statements:
+                statement.write_xml(file, indent)
+            self.write_token(self.right_squerly, file, indent)
 
 
 @dataclasses.dataclass
@@ -176,7 +196,12 @@ class Expression(XmlWriter):
     op_terms: list[tuple[scanner.Token, Term]]
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            indent += 2
+            self.term.write_xml(file, indent)
+            for op, term in self.op_terms:
+                self.write_token(op, file, indent)
+                term.write_xml(file, indent)
 
 
 @dataclasses.dataclass
@@ -191,33 +216,81 @@ class Term(XmlWriter):
     )
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            # TODO: good place to do pattern matching on types / tuples ???
+            indent += 2
+            match self.term:
+                case scanner.Token():
+                    self.write_token(self.term, file, indent)
+                case (token, term):
+                    self.write_token(token, file, indent)
+                    term.write_xml(file, indent)
+                case (token, expression, token_end):
+                    self.write_token(token, file, indent)
+                    expression.write_xml(file, indent)
+                    self.write_token(token_end, file, indent)
+                case (token, token_two, expression, token_end):
+                    self.write_token(token, file, indent)
+                    self.write_token(token_two, file, indent)
+                    expression.write_xml(file, indent)
+                    self.write_token(token_end, file, indent)
+                case SubroutineCall():
+                    self.term.write_xml(file, indent)
 
 
 @dataclasses.dataclass
 class ExpressionList(XmlWriter):
     expression: Expression | None = None
-    expression_list: list[Expression] | None = None
+    expression_list: list[tuple[scanner.Token, Expression]] | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            if self.expression:
+                self.expression.write_xml(file, indent)
+                if self.expression_list:
+                    for comma, expr in self.expression_list:
+                        self.write_token(comma, file, indent)
+                        expr.write_xml(file, indent)
 
 
 @dataclasses.dataclass
 class SubroutineCall(XmlWriter):
     subroutine_name: scanner.Token
+    left_paren: scanner.Token
+    right_paren: scanner.Token
+    dot: scanner.Token | None = None
     subroutine_source: scanner.Token | None = None
     expression_list: ExpressionList = dataclasses.field(
         default_factory=lambda: ExpressionList()
     )
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        if self.subroutine_source:
+            self.write_token(self.subroutine_source, file, indent)
+            self.write_token(self.dot, file, indent)
+        self.write_token(self.subroutine_name, file, indent)
+        self.write_token(self.left_paren, file, indent)
+        self.expression_list.write_xml(file, indent)
+        self.write_token(self.right_paren, file, indent)
 
 
-type Statement = (
+type StatementType = (
     LetStatement | IfStatement | WhileStatement | DoStatement | ReturnStatement
 )
+
+
+@dataclasses.dataclass
+class Statements(XmlWriter):
+    statement: StatementType
+
+    def write_xml(self, file: typing.IO, indent: int = 0):
+        with self.write_node(file, indent):
+            indent += 2
+            self.statement.write_xml(file, indent)
+
+
+# This is a hack - everywhere in code I use the work "Statement", but when writing xml we want to see "Statements"
+Statement = Statements
 
 
 @dataclasses.dataclass
@@ -227,7 +300,12 @@ class ReturnStatement(XmlWriter):
     expression: Expression | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            indent += 2
+            self.write_token(self.return_kw, file, indent)
+            if self.expression:
+                self.expression.write_xml(file, indent)
+            self.write_token(self.semicolon, file, indent)
 
 
 @dataclasses.dataclass
@@ -237,7 +315,11 @@ class DoStatement(XmlWriter):
     semicolon: scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            indent += 2
+            self.write_token(self.do_kw, file, indent)
+            self.subroutine_call.write_xml(file, indent)
+            self.write_token(self.semicolon, file, indent)
 
 
 @dataclasses.dataclass
@@ -250,7 +332,18 @@ class LetStatement(XmlWriter):
     index_var: tuple[scanner.Token, Expression, scanner.Token] | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            indent += 2
+            self.write_token(self.let_kw, file, indent)
+            self.write_token(self.var_name, file, indent)
+            if self.index_var:
+                left_square, expression, right_square = self.index_var
+                self.write_token(left_square, file, indent)
+                expression.write_xml(file, indent)
+                self.write_token(right_square, file, indent)
+            self.write_token(self.equal, file, indent)
+            self.expression.write_xml(file, indent)
+            self.write_token(self.semi_colon, file, indent)
 
 
 @dataclasses.dataclass
@@ -267,7 +360,23 @@ class IfStatement(XmlWriter):
     ) = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            indent += 2
+            self.write_token(self.if_kw, file, indent)
+            self.write_token(self.left_paren, file, indent)
+            self.expression.write_xml(file, indent)
+            self.write_token(self.right_paren, file, indent)
+            self.write_token(self.left_curly, file, indent)
+            for statement in self.statements or []:
+                statement.write_xml(file, indent)
+            self.write_token(self.right_curly, file, indent)
+            if self.optional_else:
+                else_kw, left_curly, statements, right_curly = self.optional_else
+            self.write_token(else_kw, file, indent)
+            self.write_token(left_curly, file, indent)
+            for statement in statements:
+                statement.write_xml(file, indent)
+            self.write_token(right_curly, file, indent)
 
 
 @dataclasses.dataclass
@@ -281,4 +390,13 @@ class WhileStatement(XmlWriter):
     statements: list[Statement] | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
+        with self.write_node(file, indent):
+            indent += 1
+            self.write_token(self.while_kw, file, indent)
+            self.write_token(self.left_paren, file, indent)
+            self.expression.write_xml(file, indent)
+            self.write_token(self.right_paren, file, indent)
+            self.write_token(self.left_curly, file, indent)
+            for statement in self.statements or []:
+                statement.write_xml(file, indent)
+            self.write_token(self.right_curly, file, indent)
