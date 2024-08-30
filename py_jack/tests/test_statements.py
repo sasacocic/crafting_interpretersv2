@@ -1,6 +1,6 @@
 import py_jack.scanner as jack_scanner
 import py_jack.parser as jack_parser
-import py_jack.ast as jack_ast
+import py_jack.ast_nodes as jack_ast
 import collections.abc
 
 tt = jack_scanner.TokenType

@@ -4,7 +4,7 @@ import py_jack.scanner as scanner
 import logging
 import itertools
 import functools
-import py_jack.ast
+import py_jack.ast_nodes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,21 +47,38 @@ class Parser:
     def parse(self):
         return self.parse_class()
 
-    def parse_class(self) -> py_jack.ast.ClassNode:
-        token = self._next()
-        match token.lexeme:
+    def parse_class(self) -> py_jack.ast_nodes.ClassNode:
+        class_kw = self._next()
+        match class_kw.lexeme:
             case "class":
                 class_name = self.parse_class_name()
                 left_squerly = self._next()
-                class_var_dec = None
-                if self._peek().lexeme in ["static", "field"]:
-                    class_var_dec = (
-                        self.parse_class_var_dec()
-                    )  # this is potentially empty
-                subroutine_dec = self.parse_subroutine_dec()
+                class_var_dec = []
+                while self._peek_token_type() in [
+                    scanner.TokenType.STATIC,
+                    scanner.TokenType.FIELD,
+                ]:
+                    class_var_dec.append(self.parse_class_var_dec())
+
+                subroutine_decs = []
+                while self._peek_token_type() in [
+                    scanner.TokenType.CONSTRUCTOR,
+                    scanner.TokenType.FUNCTION,
+                    scanner.TokenType.METHOD,
+                ]:
+                    subroutine_decs.append(self.subroutine_dec())
+
                 right_squerly = self._next()
-                return py_jack.ast.ClassNode(
-                    class_name=class_name, class_var_dec=[class_var_dec]
+
+                class_var_dec = class_var_dec if class_var_dec else None
+                subroutine_decs = subroutine_decs if subroutine_decs else None
+                return py_jack.ast_nodes.ClassNode(
+                    class_kw,
+                    class_name,
+                    left_squerly,
+                    right_squerly,
+                    class_var_dec,
+                    subroutine_decs,
                 )
             case _:
                 raise Exception("didn't start with class keyword")
@@ -72,7 +89,7 @@ class Parser:
             raise Exception(f"{class_name} not an identifier")
         return class_name
 
-    def parse_class_var_dec(self) -> py_jack.ast.ClassVarDec:
+    def parse_class_var_dec(self) -> py_jack.ast_nodes.ClassVarDec:
         field_type = self._next()
         if not any([
             field_type.lexeme == valid_lexeme for valid_lexeme in ["static", "field"]
@@ -83,47 +100,105 @@ class Parser:
 
         type_ = self.parse_type()
         varname = self.parse_varname()
+        varnames = []
+        while self._peek_token_type() == scanner.TokenType.COMMA:
+            comma = self._next()
+            var_name = self._next()  # varname's are just identifiers
+            varnames.append((comma, var_name))
         semi_colon = self._next()
         if semi_colon.lexeme != ";":
             raise Exception(f"expected ';', but found {semi_colon}")
 
-        cvd = py_jack.ast.ClassVarDec(
-            field_type=field_type, type_=type_, var_name=[varname]
+        cvd = py_jack.ast_nodes.ClassVarDec(
+            field_type=field_type,
+            type_=type_,
+            var_name=varname,
+            var_names=varnames,
+            semi_colon=semi_colon,
         )
-        print(f"cvd: {cvd}")
         return cvd
 
-    def parse_subroutine_dec(self):
-        dec_type = self._next()
+    def subroutine_dec(self):
+        sub_variant = self._next()
+        if sub_variant.token_type not in [
+            scanner.TokenType.CONSTRUCTOR,
+            scanner.TokenType.FUNCTION,
+            scanner.TokenType.METHOD,
+        ]:
+            raise Exception("invalid subroutine type")
+
+        sub_return_type = self._next()
+        assert (
+            sub_return_type.token_type == scanner.TokenType.VOID
+            or sub_return_type.lexeme in scanner.type_tokens
+        )
+
         routine_name = self._next()
 
         left_paren = self._next()
         parameter_list = self.parse_parameter_list()
         right_paren = self._next()
 
-        routine_body = self.parse_subroutine_body()
+        routine_body = self.subroutine_body()
 
-        return ""  # TODO: actually need to finish this
+        return py_jack.ast_nodes.SubroutineDec(
+            subroutine_variant=sub_variant,
+            return_type=sub_return_type,
+            name=routine_name,
+            left_paren=left_paren,
+            parameter_list=parameter_list,
+            right_paren=right_paren,
+            subroutine_body=routine_body,
+        )
 
-    def parse_parameter_list(self) -> py_jack.ast.ParameterList:
+    def parse_parameter_list(self) -> py_jack.ast_nodes.ParameterList | None:
+        if self._peek_token_type() == scanner.TokenType.RIGHT_PAREN:
+            return py_jack.ast_nodes.ParameterList()
+
+        _type = self._next()
+        var_name = self._next()
+
         type_var_name = []
 
-        # TODO: why am I not using parse type here????
-        while self._peek() and self._peek().token_type in scanner.type_tokens:
-            type_ = self._next()
-            var_name = self._next()
+        while self._peek_token_type() == scanner.TokenType.COMMA:
+            comma = self._next()
+            next_type = self._next()
+            next_var_name = self._next()
             assert var_name.token_type == scanner.TokenType.IDENTIFIER
-            type_var_name.append((type_, var_name))
-            if self._peek() and self._peek().token_type == scanner.TokenType.COMMA:
-                self._next()
+            type_var_name.append((comma, next_type, next_var_name))
         else:
-            LOGGER.debug("parameter_list ending with: %s", self._peek())
+            LOGGER.info(
+                "parameter_list ending with: %s - not in %s",
+                self._peek_token_type(),
+                scanner.type_tokens,
+            )
 
-        return py_jack.ast.ParameterList(parameters=type_var_name)
+        return py_jack.ast_nodes.ParameterList(
+            _type=_type, varname=var_name, parameters=type_var_name
+        )
 
-    def parse_subroutine_body(self):
+    def var_dec(self):
+        var_kw = self._next()
+        if var_kw.token_type != scanner.TokenType.VAR:
+            raise Exception(f"expected 'var' keyword, got: {var_kw}")
+        _type = self.parse_type()
+        var_name = self._next()
+        var_names = []
+        while self._peek_token_type() == scanner.TokenType.COMMA:
+            var_names.append((self._next(), self._next()))
+        semi_colon = self._next()
+        return py_jack.ast_nodes.VarDec(var_kw, _type, var_name, var_names, semi_colon)
+
+    def subroutine_body(self):
         left_squerly = self._next()
-        # TODO: implement statements - for now why not just implement one statement?
+        var_decs = []
+        while self._peek_token_type() == scanner.TokenType.VAR:
+            var_decs.append(self.var_dec())
+        statements = self.parse_statements()
+        right_squerly = self._next()
+        return py_jack.ast_nodes.SubroutineBody(
+            left_squerly, var_decs, statements, right_squerly
+        )
 
     def parse_type(self):
         token = self._next()
@@ -157,14 +232,14 @@ class Parser:
         return constant
 
     def parse_statements(self):
-        statements: list[py_jack.ast.Statement] = []
+        statements: list[py_jack.ast_nodes.Statement] = []
         top = self._peek_token_type()
         print(f"top: {top.name} - {top in scanner.statements}")
         while self._peek_token_type() in scanner.statements:
             statements.append(self.statement())
         return statements
 
-    def statement(self) -> py_jack.ast.Statement:
+    def statement(self) -> py_jack.ast_nodes.Statement:
         statement = None
         match self._peek_token_type():
             case scanner.TokenType.LET:
@@ -190,7 +265,7 @@ class Parser:
         l_curly = self._next()
         statements = self.parse_statements()
         r_curly = self._next()
-        if_statement = py_jack.ast.IfStatement(
+        if_statement = py_jack.ast_nodes.IfStatement(
             if_kw=if_kw,
             left_paren=l_paren,
             expression=expression,
@@ -221,7 +296,7 @@ class Parser:
         l_curly = self._next()
         statements = self.parse_statements()
         r_curly = self._next()
-        return py_jack.ast.WhileStatement(
+        return py_jack.ast_nodes.WhileStatement(
             while_kw=while_kw,
             left_paren=l_paren,
             expression=expression,
@@ -236,11 +311,14 @@ class Parser:
         if return_kw.token_type != scanner.TokenType.RETURN:
             raise Exception("expected return keyword - didn't get it")
 
-        expression = (
-            self.expression()
-        )  # this is optional - need to come back and fix this
+        if self._peek_token_type() == scanner.TokenType.SEMICOLON:
+            semi_colon = self._next()
+            return py_jack.ast_nodes.ReturnStatement(
+                return_kw=return_kw, semicolon=semi_colon
+            )
+        expression = self.expression()
         semi_colon = self._next()
-        return py_jack.ast.ReturnStatement(
+        return py_jack.ast_nodes.ReturnStatement(
             return_kw=return_kw, expression=expression, semicolon=semi_colon
         )
 
@@ -252,7 +330,7 @@ class Parser:
         subroutine_ident = self._next()
         subroutine = self.subroutine_call(sub_name=subroutine_ident)
         semi_colon = self._next()
-        return py_jack.ast.DoStatement(
+        return py_jack.ast_nodes.DoStatement(
             do_kw=do_kw, subroutine_call=subroutine, semicolon=semi_colon
         )
 
@@ -272,7 +350,7 @@ class Parser:
                 expr = self.expression()
                 semi_colon = self._next()
 
-                return py_jack.ast.LetStatement(
+                return py_jack.ast_nodes.LetStatement(
                     let_kw=let_kw,
                     var_name=ident,
                     equal=equal,
@@ -284,7 +362,7 @@ class Parser:
                 equal = self._next()
                 expr = self.expression()
                 semi_colon = self._next()
-                return py_jack.ast.LetStatement(
+                return py_jack.ast_nodes.LetStatement(
                     let_kw=let_kw,
                     var_name=ident,
                     equal=equal,
@@ -300,30 +378,32 @@ class Parser:
         while (top := self._peek()) and top.token_type in scanner.operations:
             LOGGER.debug("looking at (op term)*")
             ops_and_terms.append((self.op(), self.term()))
-        return py_jack.ast.Expression(term=term, op_terms=ops_and_terms)
+        return py_jack.ast_nodes.Expression(term=term, op_terms=ops_and_terms)
 
-    def term(self) -> py_jack.ast.Term:
+    def term(self) -> py_jack.ast_nodes.Term:
         LOGGER.debug(f"term:tokens: {self.tokens}")
         top = self._peek()
         matcher = top.token_type if top else None
         match matcher:
             case scanner.TokenType.STRING_CONSTANT:
-                return py_jack.ast.Term(term=self.string_constant())
+                return py_jack.ast_nodes.Term(term=self.string_constant())
             case scanner.TokenType.INTEGER_CONSTANT:
-                return py_jack.ast.Term(term=self.integer_constant())
+                return py_jack.ast_nodes.Term(term=self.integer_constant())
             case token if token in scanner.keyword_constants:
-                return py_jack.ast.Term(term=self.keyword_constant())
+                return py_jack.ast_nodes.Term(term=self.keyword_constant())
             case scanner.TokenType.LEFT_PAREN:
                 left_paren = self._next()
                 expression = self.expression()
                 right_paren = self._next()
                 if right_paren.token_type != scanner.TokenType.RIGHT_PAREN:
                     raise Exception("expected right paren - didn't recieve")
-                return py_jack.ast.Term(term=(left_paren, expression, right_paren))
+                return py_jack.ast_nodes.Term(
+                    term=(left_paren, expression, right_paren)
+                )
             case tok if tok in scanner.unary_op:
                 unary = self.unary_op()
                 term = self.term()
-                return py_jack.ast.Term(term=(unary, term))
+                return py_jack.ast_nodes.Term(term=(unary, term))
             case scanner.TokenType.IDENTIFIER:
                 ident = self._next()
                 LOGGER.debug(f"peeking: {self._peek()}")
@@ -336,7 +416,7 @@ class Parser:
                         left_square_bracket = self._next()
                         expression = self.expression()
                         right_square_bracket = self._next()
-                        return py_jack.ast.Term(
+                        return py_jack.ast_nodes.Term(
                             term=(
                                 ident,
                                 left_square_bracket,
@@ -346,12 +426,12 @@ class Parser:
                         )
                     case scanner.TokenType.LEFT_PAREN | scanner.TokenType.DOT:
                         subroutine = self.subroutine_call(sub_name=ident)
-                        return py_jack.ast.Term(term=subroutine)
+                        return py_jack.ast_nodes.Term(term=subroutine)
                     case _:
                         LOGGER.debug("creating ident: %s", ident)
-                        return py_jack.ast.Term(term=ident)
+                        return py_jack.ast_nodes.Term(term=ident)
             case _:
-                raise Exception("term did not match any rule")
+                raise Exception(f"{matcher}: term did not match any rule")
 
     def unary_op(self):
         if self._peek().token_type not in scanner.unary_op:
@@ -395,7 +475,7 @@ class Parser:
                 # left_paren = self._next()
                 expression_list = self.expression_list()
                 # right_paren = self._next()
-                return py_jack.ast.SubroutineCall(
+                return py_jack.ast_nodes.SubroutineCall(
                     subroutine_source=sub_name,
                     subroutine_name=subroutine_name,
                     expression_list=expression_list,
@@ -404,7 +484,7 @@ class Parser:
                 # left_paren = self._next()
                 expression_list = self.expression_list()
                 # right_paren = self._next()
-                return py_jack.ast.SubroutineCall(
+                return py_jack.ast_nodes.SubroutineCall(
                     subroutine_name=sub_name, expression_list=expression_list
                 )
             case _:
@@ -420,7 +500,7 @@ class Parser:
         match matcher:
             case scanner.TokenType.RIGHT_PAREN:
                 right_paren = self._next()
-                return py_jack.ast.ExpressionList()
+                return py_jack.ast_nodes.ExpressionList()
             case _:
                 expression = self.expression()
                 expressions = []
@@ -432,7 +512,7 @@ class Parser:
                     expressions.append((comma, next_expression))
 
                 right_paren = self._next()
-                return py_jack.ast.ExpressionList(
+                return py_jack.ast_nodes.ExpressionList(
                     expression=expression,
                     expression_list=functools.reduce(
                         lambda acc, val: acc + [val[1]], expressions, []
