@@ -1,3 +1,4 @@
+from __future__ import annotations
 import enum
 import typing
 import logging
@@ -67,10 +68,9 @@ class TokenType(enum.Enum):
 type_tokens = set([
     TokenType.INT,
     TokenType.CHAR,
-    TokenType.IDENTIFIER,
     TokenType.BOOLEAN,
+    TokenType.IDENTIFIER,
 ])
-
 
 literals = set((
     TokenType.INTEGER_CONSTANT,
@@ -80,7 +80,6 @@ literals = set((
     TokenType.NULL,
     TokenType.THIS,
 ))
-
 
 operations = set([
     TokenType.PLUS,
@@ -110,6 +109,53 @@ statements = set([
 ])
 
 unary_op = set([TokenType.MINUS, TokenType.TILDE])
+
+
+token_variants = {
+    "keywords": set([
+        TokenType.CLASS,
+        TokenType.CONSTRUCTOR,
+        TokenType.FUNCTION,
+        TokenType.METHOD,
+        TokenType.FIELD,
+        TokenType.STATIC,
+        TokenType.VAR,
+        TokenType.INT,
+        TokenType.CHAR,
+        TokenType.BOOLEAN,
+        TokenType.VOID,
+        TokenType.TRUE,
+        TokenType.FALSE,
+        TokenType.NULL,
+        TokenType.THIS,
+        TokenType.LET,
+        TokenType.DO,
+        TokenType.IF,
+        TokenType.ELSE,
+        TokenType.WHILE,
+        TokenType.RETURN,
+    ]),
+    "symbols": set([
+        TokenType.LEFT_CURLY,
+        TokenType.RIGHT_CURLY,
+        TokenType.LEFT_PAREN,
+        TokenType.RIGHT_PAREN,
+        TokenType.LEFT_SQUARE_BRACKET,
+        TokenType.RIGHT_SQUARE_BRACKET,
+        TokenType.DOT,
+        TokenType.COMMA,
+        TokenType.SEMICOLON,
+        TokenType.PLUS,
+        TokenType.MINUS,
+        TokenType.ASTERISK,
+        TokenType.FORWARD_SLASH,
+        TokenType.AMPERSAND,
+        TokenType.PIPE,
+        TokenType.LESS_THAN,
+        TokenType.GREATER_THAN,
+        TokenType.EQUAL,
+    ]),
+}
 
 
 class Keywords(enum.StrEnum):

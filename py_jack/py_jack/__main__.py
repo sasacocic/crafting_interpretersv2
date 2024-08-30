@@ -19,10 +19,10 @@ logging.config.dictConfig({
     },
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
     "loggers": {
-        "py_jack.scanner": {"level": LOG_LEVEL or logging.DEBUG},
-        "py_jack.parser": {"level": LOG_LEVEL or logging.DEBUG},
+        "py_jack.scanner": {"level": LOG_LEVEL or logging.INFO},
+        "py_jack.parser": {"level": LOG_LEVEL or logging.INFO},
     },
-    "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.DEBUG},
+    "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.INFO},
 })
 
 LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
@@ -76,8 +76,19 @@ def scanner(file_path, output_file):
 
 
 @click.command()
-def parser():
-    click.echo("parser")
+@click.argument("file-path")
+@click.option("--output-file", default="output.xml", help="name of the file to output")
+def parser(file_path: str, output_file: str):
+    path = pl.Path(file_path)
+    if path.exists():
+        src_code = path.read_text()
+        scanner = scan.Scanner(src_code)
+        tokens = scanner.scan()
+        parser = parse.Parser(tokens=tokens)
+        class_node = parser.parse()
+        class_node.write_xml(file_path=pl.Path(output_file), indent=1)
+    else:
+        raise FileNotFoundError(f"{file_path.resolve().name} not found")
 
 
 @click.command()
