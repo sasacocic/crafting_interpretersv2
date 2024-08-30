@@ -101,6 +101,13 @@ keyword_constants = set([
     TokenType.THIS,
 ])
 
+statements = set([
+    TokenType.LET,
+    TokenType.IF,
+    TokenType.WHILE,
+    TokenType.DO,
+    TokenType.RETURN,
+])
 
 unary_op = set([TokenType.MINUS, TokenType.TILDE])
 
