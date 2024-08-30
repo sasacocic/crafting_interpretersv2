@@ -3,150 +3,10 @@ from collections.abc import Iterator
 import py_jack.scanner as scanner
 import logging
 import itertools
-import pathlib
-import typing
-import dataclasses
 import functools
+import py_jack.ast
 
 LOGGER = logging.getLogger(__name__)
-
-
-class XmlWriter(typing.Protocol):
-    def write_xml(self, file: typing.IO, indent: int = 0): ...
-    def write_token(self, token: scanner.Token, file: typing.IO, indent: int = 0):
-        if token.token_type in scanner.Scanner.keywords.values():
-            file.write(f"{'\t' * indent}<keyword> {token.lexeme} </keyword>\n")
-        else:
-            file.write(
-                f"{'\t' * indent}<{token.token_type.name.lower()}> {token.lexeme} </{token.token_type.name.lower()}>\n"
-            )
-
-    def write_string(
-        self, surround: str, element: str, file: typing.IO, indent: int = 0
-    ):
-        file.write(f"{'\t' * indent}<{surround}> {element} </{surround}>\n")
-
-
-class ClassNode(XmlWriter):
-    class_name: scanner.Token
-    class_var_dec: list[ClassVarDec] | None
-
-    def __init__(
-        self, class_name: scanner.Token, class_var_dec: list[ClassVarDec] | None = None
-    ) -> None:
-        self.class_name = class_name
-        self.class_var_dec = class_var_dec
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}( class {self.class_name.lexeme} {{ }} len: {len(self.class_var_dec)})"
-
-    # why pass a file? Why not return a string or write to stdout? Could also be useful.
-    def write_xml(self, file_path: pathlib.Path, indent: int):
-        mode = "w"
-        # if file_path.exists():
-        #     mode = "w"
-        with file_path.open(mode) as xml_file:
-            xml_file.write("<class>\n")
-            xml_file.write(f"{'\t' * indent}<keyword> class </keyword>\n")
-            self.write_token(self.class_name, xml_file, indent=indent)
-            self.write_string("symbol", "{", xml_file, indent=indent)
-            for class_var_dec in self.class_var_dec:
-                class_var_dec.write_xml(xml_file, indent=indent)
-            xml_file.write("</class>\n")
-
-
-class ClassVarDec(XmlWriter):
-    field_type: scanner.Token
-    type_: scanner.Token
-    var_name: list[scanner.Token] | None
-
-    def __init__(
-        self,
-        field_type: scanner.Token,
-        type_: scanner.Token,
-        var_name: list[scanner.Token],
-    ) -> None:
-        self.field_type = field_type
-        self.type_ = type_
-        self.var_name = var_name
-
-    def write_xml(self, file: typing.IO, indent: int):
-        file.write(f"{'\t' * indent}<classVarDec>\n")
-        indent += 1
-        self.write_token(self.field_type, file, indent=indent)
-        self.write_token(self.type_, file, indent=indent)
-        for var_name in self.var_name:
-            self.write_token(var_name, file, indent=indent)
-            file.write(
-                f"{'\t' * indent}<symbol> , </symbol>\n"
-            )  # TODO: I know this is wrong. The last iteration I don't want to add a comma
-
-        file.write(f"{'\t' * indent}<symbol> ; </symbol>\n")
-        file.write(f"{'\t' * indent}</classVarDec>\n")
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}( {self.field_type}  | {self.field_type} | {self.var_name}) "
-
-
-class SubroutineDec(XmlWriter):
-    subroutine_type: scanner.Token
-    return_type: scanner.Token
-    name: scanner.Token
-    parameter_list: None = None
-    subroutine_body: None = None
-
-
-@dataclasses.dataclass
-class ParameterList(XmlWriter):
-    parameters: list[tuple[scanner.Token, scanner.Token]]
-
-    def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
-
-
-@dataclasses.dataclass
-class Expression(XmlWriter):
-    term: Term
-    op_terms: list[tuple[scanner.Token, Term]]
-
-    def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
-
-
-@dataclasses.dataclass
-class Term(XmlWriter):
-    # terms: scanner.Token | ArrayOperation | subroutineCall | '(' expression ')' | expressionList
-    term: (
-        scanner.Token
-        | tuple[scanner.Token, Term]
-        | tuple[scanner.Token, Expression, scanner.Token]
-        | tuple[scanner.Token, scanner.Token, Expression, scanner.Token]
-        | SubroutineCall
-    )
-
-    def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
-
-
-@dataclasses.dataclass
-class ExpressionList(XmlWriter):
-    expression: Expression | None = None
-    expression_list: list[Expression] | None = None
-
-    def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
-
-
-@dataclasses.dataclass
-class SubroutineCall(XmlWriter):
-    subroutine_name: scanner.Token
-    subroutine_source: scanner.Token | None = None
-    expression_list: ExpressionList = dataclasses.field(
-        default_factory=lambda: ExpressionList()
-    )
-
-    def write_xml(self, file: typing.IO, indent: int = 0):
-        raise NotImplementedError("not working yet")
 
 
 class Parser:
@@ -179,14 +39,15 @@ class Parser:
         new_iter = itertools.chain([top], self.token_iter)
         self.token_iter = new_iter
         return top
-        new_one, copy = itertools.tee(self.token_iter)
-        self.token_iter = new_one  # have to do this with tee - they say not to use the original anymore
-        return next(copy, None)
+
+    def _peek_token_type(self):
+        top = self._peek()
+        return top.token_type if top else None
 
     def parse(self):
         return self.parse_class()
 
-    def parse_class(self) -> ClassNode:
+    def parse_class(self) -> py_jack.ast.ClassNode:
         token = self._next()
         match token.lexeme:
             case "class":
@@ -199,7 +60,9 @@ class Parser:
                     )  # this is potentially empty
                 subroutine_dec = self.parse_subroutine_dec()
                 right_squerly = self._next()
-                return ClassNode(class_name=class_name, class_var_dec=[class_var_dec])
+                return py_jack.ast.ClassNode(
+                    class_name=class_name, class_var_dec=[class_var_dec]
+                )
             case _:
                 raise Exception("didn't start with class keyword")
 
@@ -209,7 +72,7 @@ class Parser:
             raise Exception(f"{class_name} not an identifier")
         return class_name
 
-    def parse_class_var_dec(self) -> ClassVarDec:
+    def parse_class_var_dec(self) -> py_jack.ast.ClassVarDec:
         field_type = self._next()
         if not any([
             field_type.lexeme == valid_lexeme for valid_lexeme in ["static", "field"]
@@ -224,7 +87,9 @@ class Parser:
         if semi_colon.lexeme != ";":
             raise Exception(f"expected ';', but found {semi_colon}")
 
-        cvd = ClassVarDec(field_type=field_type, type_=type_, var_name=[varname])
+        cvd = py_jack.ast.ClassVarDec(
+            field_type=field_type, type_=type_, var_name=[varname]
+        )
         print(f"cvd: {cvd}")
         return cvd
 
@@ -240,7 +105,7 @@ class Parser:
 
         return ""  # TODO: actually need to finish this
 
-    def parse_parameter_list(self) -> ParameterList:
+    def parse_parameter_list(self) -> py_jack.ast.ParameterList:
         type_var_name = []
 
         # TODO: why am I not using parse type here????
@@ -254,7 +119,7 @@ class Parser:
         else:
             LOGGER.debug("parameter_list ending with: %s", self._peek())
 
-        return ParameterList(parameters=type_var_name)
+        return py_jack.ast.ParameterList(parameters=type_var_name)
 
     def parse_subroutine_body(self):
         left_squerly = self._next()
@@ -288,43 +153,177 @@ class Parser:
 
     def parse_constant(self):
         constant = self._next()
-
         assert constant.token_type in scanner.literals
-
         return constant
 
-    # expression parsing
+    def parse_statements(self):
+        statements: list[py_jack.ast.Statement] = []
+        top = self._peek_token_type()
+        print(f"top: {top.name} - {top in scanner.statements}")
+        while self._peek_token_type() in scanner.statements:
+            statements.append(self.statement())
+        return statements
 
+    def statement(self) -> py_jack.ast.Statement:
+        statement = None
+        match self._peek_token_type():
+            case scanner.TokenType.LET:
+                statement = self.let_statement()
+            case scanner.TokenType.IF:
+                statement = self.if_statement()
+            case scanner.TokenType.WHILE:
+                statement = self.while_statement()
+            case scanner.TokenType.DO:
+                statement = self.do_statement()
+            case scanner.TokenType.RETURN:
+                statement = self.return_statement()
+            case _:
+                raise Exception("statment didn't match one of the statements")
+
+        return statement
+
+    def if_statement(self):
+        if_kw = self._next()
+        l_paren = self._next()
+        expression = self.expression()
+        r_paren = self._next()
+        l_curly = self._next()
+        statements = self.parse_statements()
+        r_curly = self._next()
+        if_statement = py_jack.ast.IfStatement(
+            if_kw=if_kw,
+            left_paren=l_paren,
+            expression=expression,
+            right_paren=r_paren,
+            left_curly=l_curly,
+            statements=statements,
+            right_curly=r_curly,
+        )
+
+        if (else_kw := self._peek_token_type()) and else_kw == scanner.TokenType.ELSE:
+            else_kw = self._next()
+            else_left_curly = self._next()
+            else_statements = self.parse_statements()
+            else_right_curly = self._next()
+            if_statement.optional_else = (
+                else_kw,
+                else_left_curly,
+                else_statements,
+                else_right_curly,
+            )
+        return if_statement
+
+    def while_statement(self):
+        while_kw = self._next()
+        l_paren = self._next()
+        expression = self.expression()
+        r_paren = self._next()
+        l_curly = self._next()
+        statements = self.parse_statements()
+        r_curly = self._next()
+        return py_jack.ast.WhileStatement(
+            while_kw=while_kw,
+            left_paren=l_paren,
+            expression=expression,
+            right_paren=r_paren,
+            left_curly=l_curly,
+            statements=statements,
+            right_curly=r_curly,
+        )
+
+    def return_statement(self):
+        return_kw = self._next()
+        if return_kw.token_type != scanner.TokenType.RETURN:
+            raise Exception("expected return keyword - didn't get it")
+
+        expression = (
+            self.expression()
+        )  # this is optional - need to come back and fix this
+        semi_colon = self._next()
+        return py_jack.ast.ReturnStatement(
+            return_kw=return_kw, expression=expression, semicolon=semi_colon
+        )
+
+    def do_statement(self):
+        do_kw = self._next()
+        if do_kw.token_type != scanner.TokenType.DO and do_kw.lexeme != "do":
+            raise Exception("expected do keyword - didn't get it")
+
+        subroutine_ident = self._next()
+        subroutine = self.subroutine_call(sub_name=subroutine_ident)
+        semi_colon = self._next()
+        return py_jack.ast.DoStatement(
+            do_kw=do_kw, subroutine_call=subroutine, semicolon=semi_colon
+        )
+
+    def let_statement(self):
+        LOGGER.info("parsing:let_statement")
+        let_kw = self._next()
+        if let_kw.token_type != scanner.TokenType.DO and let_kw.lexeme != "let":
+            raise Exception("expected let keyword - didn't get it")
+
+        ident = self._next()
+        match self._peek().token_type:
+            case scanner.TokenType.LEFT_SQUARE_BRACKET:
+                left_square = self._next()
+                optional_expr = self.expression()
+                right_square = self._next()
+                equal = self._next()
+                expr = self.expression()
+                semi_colon = self._next()
+
+                return py_jack.ast.LetStatement(
+                    let_kw=let_kw,
+                    var_name=ident,
+                    equal=equal,
+                    expression=expr,
+                    semi_colon=semi_colon,
+                    index_var=(left_square, optional_expr, right_square),
+                )
+            case _:
+                equal = self._next()
+                expr = self.expression()
+                semi_colon = self._next()
+                return py_jack.ast.LetStatement(
+                    let_kw=let_kw,
+                    var_name=ident,
+                    equal=equal,
+                    expression=expr,
+                    semi_colon=semi_colon,
+                )
+
+    # expression parsing
     def expression(self):
         LOGGER.debug(f"expression:tokens: {self.tokens}")
         term = self.term()
         ops_and_terms = []
         while (top := self._peek()) and top.token_type in scanner.operations:
+            LOGGER.debug("looking at (op term)*")
             ops_and_terms.append((self.op(), self.term()))
-        return Expression(term=term, op_terms=ops_and_terms)
+        return py_jack.ast.Expression(term=term, op_terms=ops_and_terms)
 
-    def term(self) -> Term:
+    def term(self) -> py_jack.ast.Term:
         LOGGER.debug(f"term:tokens: {self.tokens}")
         top = self._peek()
         matcher = top.token_type if top else None
         match matcher:
             case scanner.TokenType.STRING_CONSTANT:
-                return Term(term=self.string_constant())
+                return py_jack.ast.Term(term=self.string_constant())
             case scanner.TokenType.INTEGER_CONSTANT:
-                return Term(term=self.integer_constant())
+                return py_jack.ast.Term(term=self.integer_constant())
             case token if token in scanner.keyword_constants:
-                return Term(term=self.keyword_constant())
+                return py_jack.ast.Term(term=self.keyword_constant())
             case scanner.TokenType.LEFT_PAREN:
                 left_paren = self._next()
                 expression = self.expression()
                 right_paren = self._next()
                 if right_paren.token_type != scanner.TokenType.RIGHT_PAREN:
                     raise Exception("expected right paren - didn't recieve")
-                return Term(term=(left_paren, expression, right_paren))
+                return py_jack.ast.Term(term=(left_paren, expression, right_paren))
             case tok if tok in scanner.unary_op:
                 unary = self.unary_op()
                 term = self.term()
-                return Term(term=(unary, term))
+                return py_jack.ast.Term(term=(unary, term))
             case scanner.TokenType.IDENTIFIER:
                 ident = self._next()
                 LOGGER.debug(f"peeking: {self._peek()}")
@@ -337,7 +336,7 @@ class Parser:
                         left_square_bracket = self._next()
                         expression = self.expression()
                         right_square_bracket = self._next()
-                        return Term(
+                        return py_jack.ast.Term(
                             term=(
                                 ident,
                                 left_square_bracket,
@@ -347,10 +346,10 @@ class Parser:
                         )
                     case scanner.TokenType.LEFT_PAREN | scanner.TokenType.DOT:
                         subroutine = self.subroutine_call(sub_name=ident)
-                        return Term(term=subroutine)
+                        return py_jack.ast.Term(term=subroutine)
                     case _:
                         LOGGER.debug("creating ident: %s", ident)
-                        return Term(term=ident)
+                        return py_jack.ast.Term(term=ident)
             case _:
                 raise Exception("term did not match any rule")
 
@@ -361,6 +360,7 @@ class Parser:
         return self._next()
 
     def op(self):
+        LOGGER.debug("parsing:op")
         if self._peek().token_type not in scanner.operations:
             raise Exception(f"Expected a operator got {self._peek().token_type}")
 
@@ -394,8 +394,8 @@ class Parser:
                 subroutine_name = self._next()
                 # left_paren = self._next()
                 expression_list = self.expression_list()
-                right_paren = self._next()
-                return SubroutineCall(
+                # right_paren = self._next()
+                return py_jack.ast.SubroutineCall(
                     subroutine_source=sub_name,
                     subroutine_name=subroutine_name,
                     expression_list=expression_list,
@@ -403,8 +403,8 @@ class Parser:
             case scanner.TokenType.LEFT_PAREN:
                 # left_paren = self._next()
                 expression_list = self.expression_list()
-                right_paren = self._next()
-                return SubroutineCall(
+                # right_paren = self._next()
+                return py_jack.ast.SubroutineCall(
                     subroutine_name=sub_name, expression_list=expression_list
                 )
             case _:
@@ -419,8 +419,8 @@ class Parser:
         matcher = token.token_type if token else None
         match matcher:
             case scanner.TokenType.RIGHT_PAREN:
-                self._next()
-                return ExpressionList()
+                right_paren = self._next()
+                return py_jack.ast.ExpressionList()
             case _:
                 expression = self.expression()
                 expressions = []
@@ -431,7 +431,8 @@ class Parser:
                     next_expression = self.expression()
                     expressions.append((comma, next_expression))
 
-                return ExpressionList(
+                right_paren = self._next()
+                return py_jack.ast.ExpressionList(
                     expression=expression,
                     expression_list=functools.reduce(
                         lambda acc, val: acc + [val[1]], expressions, []
