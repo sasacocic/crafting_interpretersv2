@@ -1,5 +1,5 @@
 from __future__ import annotations
-from py_jilox.scanner import Token
+from py_jilox.lox_scanner import Token
 import typing
 
 

@@ -69,17 +69,17 @@ class Token:
         self, token_type: TokenType, lexeme: str, literal: dict | None, line: int
     ) -> None:
         self.token_type = token_type
-
         self.lexeme = lexeme
         self.literal = literal
         self.line = line
 
     def __repr__(self) -> str:
         # TODO: need to look into enums in python more
-        if isinstance(self.literal, str):
-            return str(self.token_type) + " " + self.lexeme + " " + self.literal
-        else:
-            return str(self.token_type) + " " + self.lexeme
+        match self.literal:
+            case str(literal):
+                return str(self.token_type) + " " + self.lexeme + " " + literal
+            case _:
+                return str(self.token_type) + " " + self.lexeme
 
 
 class Scanner:
