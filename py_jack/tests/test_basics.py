@@ -1,7 +1,6 @@
 import py_jack.scanner as jack_scanner
 import py_jack.parser as jack_parser
 import py_jack.ast_nodes as jack_ast
-import pathlib as p
 
 """
 TODO: figure out how to unit test scanner and parser - I feel like if I can do that I can actually,
@@ -395,31 +394,3 @@ def test_general_expression():
     # [[op, term], *_unused] = expression.op_terms
     # assert op.token_type == token_types.PLUS
     # assert term.term.token_type == token_types.INTEGER_CONSTANT
-
-
-import collections
-
-
-def test_read_dir():
-    jack_dir = p.Path("/Users/sasacocic/Desktop/nand2tetris/projects/10/")
-
-    for directory in jack_dir.iterdir():
-        if directory.is_dir():
-            dir_name = directory.name
-            jack_files = directory.glob("*.jack")
-            xml_files = directory.glob("*.xml")
-
-            files = collections.defaultdict(list)
-
-            # for jack_file in jack_files:
-            #     [name, *rest] = jack_file.name.split(".jack")
-            #     files[dir_name + name] = []
-
-            for xml_file in xml_files:
-                if xml_file.name.endswith("T.xml"):
-                    continue
-                [name, *rest] = xml_file.name.split(".xml")
-                files[dir_name + "/" + name].append(xml_file)
-
-            for key, val in files.items():
-                print(f"{key}:", val)
