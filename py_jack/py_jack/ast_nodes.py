@@ -1,5 +1,5 @@
 from __future__ import annotations
-import py_jack.scanner as scanner
+import py_jack.jack_scanner as jack_scanner
 import pathlib
 import typing
 import dataclasses
@@ -8,24 +8,24 @@ import contextlib
 
 class XmlWriter(typing.Protocol):
     def write_xml(self, file: typing.IO, indent: int = 0): ...
-    def write_token(self, token: scanner.Token, file: typing.IO, indent: int = 0):
-        if token.token_type in scanner.token_variants["keywords"]:
+    def write_token(self, token: jack_scanner.Token, file: typing.IO, indent: int = 0):
+        if token.token_type in jack_scanner.token_variants["keywords"]:
             file.write(f"{' ' * indent}<keyword> {token.lexeme} </keyword>\n")
-        elif token.token_type in scanner.token_variants["symbols"]:
+        elif token.token_type in jack_scanner.token_variants["symbols"]:
             match token.token_type:
-                case scanner.TokenType.AMPERSAND:
+                case jack_scanner.TokenType.AMPERSAND:
                     file.write(f"{' ' * indent}<symbol> {'&amp;'} </symbol>\n")
-                case scanner.TokenType.GREATER_THAN:
+                case jack_scanner.TokenType.GREATER_THAN:
                     file.write(f"{' ' * indent}<symbol> {'&gt;'} </symbol>\n")
-                case scanner.TokenType.LESS_THAN:
+                case jack_scanner.TokenType.LESS_THAN:
                     file.write(f"{' ' * indent}<symbol> {'&lt;'} </symbol>\n")
-                case scanner.TokenType() if token.lexeme == '"':
+                case jack_scanner.TokenType() if token.lexeme == '"':
                     file.write(f"{' ' * indent}<symbol> {'&quot;'} </symbol>\n")
                 case _:
                     file.write(f"{' ' * indent}<symbol> {token.lexeme} </symbol>\n")
         elif token.token_type in [
-            scanner.TokenType.INTEGER_CONSTANT,
-            scanner.TokenType.STRING_CONSTANT,
+            jack_scanner.TokenType.INTEGER_CONSTANT,
+            jack_scanner.TokenType.STRING_CONSTANT,
         ]:
             tag = token.token_type.name.lower().split("_")
             new_tag = "".join([tag[0], tag[1][0].upper() + tag[1][1:]])
@@ -53,10 +53,10 @@ class XmlWriter(typing.Protocol):
 
 @dataclasses.dataclass
 class ClassNode(XmlWriter):
-    class_kw: scanner.Token
-    class_name: scanner.Token
-    left_squerly: scanner.Token
-    right_squerly: scanner.Token
+    class_kw: jack_scanner.Token
+    class_name: jack_scanner.Token
+    left_squerly: jack_scanner.Token
+    right_squerly: jack_scanner.Token
     class_var_dec: list[ClassVarDec] | None = None
     subroutine_dec: list[SubroutineDec] | None = None
 
@@ -89,11 +89,11 @@ class ClassNode(XmlWriter):
 
 @dataclasses.dataclass
 class ClassVarDec(XmlWriter):
-    field_type: scanner.Token
-    type_: scanner.Token
-    var_name: scanner.Token
-    semi_colon: scanner.Token
-    var_names: list[tuple[scanner.Token, scanner.Token]] | None = None
+    field_type: jack_scanner.Token
+    type_: jack_scanner.Token
+    var_name: jack_scanner.Token
+    semi_colon: jack_scanner.Token
+    var_names: list[tuple[jack_scanner.Token, jack_scanner.Token]] | None = None
 
     def write_xml(self, file: typing.IO, indent: int):
         # file.write(f"{' ' * indent}<classVarDec>\n")
@@ -118,11 +118,11 @@ class ClassVarDec(XmlWriter):
 
 @dataclasses.dataclass
 class SubroutineDec(XmlWriter):
-    subroutine_variant: scanner.Token
-    return_type: scanner.Token
-    name: scanner.Token
-    left_paren: scanner.Token
-    right_paren: scanner.Token
+    subroutine_variant: jack_scanner.Token
+    return_type: jack_scanner.Token
+    name: jack_scanner.Token
+    left_paren: jack_scanner.Token
+    right_paren: jack_scanner.Token
     subroutine_body: SubroutineBody
     parameter_list: ParameterList
 
@@ -141,11 +141,11 @@ class SubroutineDec(XmlWriter):
 
 @dataclasses.dataclass
 class ParameterList(XmlWriter):
-    _type: scanner.Token | None = None
-    varname: scanner.Token | None = None
-    parameters: list[tuple[scanner.Token, scanner.Token, scanner.Token]] = (
-        dataclasses.field(default_factory=list)
-    )
+    _type: jack_scanner.Token | None = None
+    varname: jack_scanner.Token | None = None
+    parameters: list[
+        tuple[jack_scanner.Token, jack_scanner.Token, jack_scanner.Token]
+    ] = dataclasses.field(default_factory=list)
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent) as t:
@@ -164,11 +164,11 @@ class ParameterList(XmlWriter):
 
 @dataclasses.dataclass
 class VarDec(XmlWriter):
-    var_kw: scanner.Token
-    _type: scanner.Token
-    var_name: scanner.Token
-    var_names: list[tuple[scanner.Token, scanner.Token]]
-    semi_colon: scanner.Token
+    var_kw: jack_scanner.Token
+    _type: jack_scanner.Token
+    var_name: jack_scanner.Token
+    var_names: list[tuple[jack_scanner.Token, jack_scanner.Token]]
+    semi_colon: jack_scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int):
         with self.write_node(file, indent):
@@ -184,10 +184,10 @@ class VarDec(XmlWriter):
 
 @dataclasses.dataclass
 class SubroutineBody(XmlWriter):
-    left_squerly: scanner.Token
+    left_squerly: jack_scanner.Token
     var_decs: list[VarDec]
     statements: Statements
-    right_squerly: scanner.Token
+    right_squerly: jack_scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int):
         with self.write_node(file, indent):
@@ -202,7 +202,7 @@ class SubroutineBody(XmlWriter):
 @dataclasses.dataclass
 class Expression(XmlWriter):
     term: Term
-    op_terms: list[tuple[scanner.Token, Term]]
+    op_terms: list[tuple[jack_scanner.Token, Term]]
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
@@ -215,21 +215,19 @@ class Expression(XmlWriter):
 
 @dataclasses.dataclass
 class Term(XmlWriter):
-    # terms: scanner.Token | ArrayOperation | subroutineCall | '(' expression ')' | expressionList
     term: (
-        scanner.Token
-        | tuple[scanner.Token, Term]
-        | tuple[scanner.Token, Expression, scanner.Token]
-        | tuple[scanner.Token, scanner.Token, Expression, scanner.Token]
+        jack_scanner.Token
+        | tuple[jack_scanner.Token, Term]
+        | tuple[jack_scanner.Token, Expression, jack_scanner.Token]
+        | tuple[jack_scanner.Token, jack_scanner.Token, Expression, jack_scanner.Token]
         | SubroutineCall
     )
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
-            # TODO: good place to do pattern matching on types / tuples ???
             indent += 2
             match self.term:
-                case scanner.Token():
+                case jack_scanner.Token():
                     self.write_token(self.term, file, indent)
                 case (token, term):
                     self.write_token(token, file, indent)
@@ -250,7 +248,7 @@ class Term(XmlWriter):
 @dataclasses.dataclass
 class ExpressionList(XmlWriter):
     expression: Expression | None = None
-    expression_list: list[tuple[scanner.Token, Expression]] | None = None
+    expression_list: list[tuple[jack_scanner.Token, Expression]] | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
@@ -265,11 +263,11 @@ class ExpressionList(XmlWriter):
 
 @dataclasses.dataclass
 class SubroutineCall(XmlWriter):
-    subroutine_name: scanner.Token
-    left_paren: scanner.Token
-    right_paren: scanner.Token
-    dot: scanner.Token | None = None
-    subroutine_source: scanner.Token | None = None
+    subroutine_name: jack_scanner.Token
+    left_paren: jack_scanner.Token
+    right_paren: jack_scanner.Token
+    dot: jack_scanner.Token | None = None
+    subroutine_source: jack_scanner.Token | None = None
     expression_list: ExpressionList = dataclasses.field(
         default_factory=lambda: ExpressionList()
     )
@@ -302,8 +300,8 @@ class Statements(XmlWriter):
 
 @dataclasses.dataclass
 class ReturnStatement(XmlWriter):
-    return_kw: scanner.Token
-    semicolon: scanner.Token
+    return_kw: jack_scanner.Token
+    semicolon: jack_scanner.Token
     expression: Expression | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
@@ -317,9 +315,9 @@ class ReturnStatement(XmlWriter):
 
 @dataclasses.dataclass
 class DoStatement(XmlWriter):
-    do_kw: scanner.Token
+    do_kw: jack_scanner.Token
     subroutine_call: SubroutineCall
-    semicolon: scanner.Token
+    semicolon: jack_scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
@@ -331,12 +329,12 @@ class DoStatement(XmlWriter):
 
 @dataclasses.dataclass
 class LetStatement(XmlWriter):
-    let_kw: scanner.Token
-    var_name: scanner.Token
-    equal: scanner.Token
+    let_kw: jack_scanner.Token
+    var_name: jack_scanner.Token
+    equal: jack_scanner.Token
     expression: Expression
-    semi_colon: scanner.Token
-    index_var: tuple[scanner.Token, Expression, scanner.Token] | None = None
+    semi_colon: jack_scanner.Token
+    index_var: tuple[jack_scanner.Token, Expression, jack_scanner.Token] | None = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
@@ -355,15 +353,16 @@ class LetStatement(XmlWriter):
 
 @dataclasses.dataclass
 class IfStatement(XmlWriter):
-    if_kw: scanner.Token
-    left_paren: scanner.Token
+    if_kw: jack_scanner.Token
+    left_paren: jack_scanner.Token
     expression: Expression
-    right_paren: scanner.Token
-    left_curly: scanner.Token
-    right_curly: scanner.Token
+    right_paren: jack_scanner.Token
+    left_curly: jack_scanner.Token
+    right_curly: jack_scanner.Token
     statements: Statements
     optional_else: (
-        tuple[scanner.Token, scanner.Token, Statements, scanner.Token] | None
+        tuple[jack_scanner.Token, jack_scanner.Token, Statements, jack_scanner.Token]
+        | None
     ) = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
@@ -386,12 +385,12 @@ class IfStatement(XmlWriter):
 
 @dataclasses.dataclass
 class WhileStatement(XmlWriter):
-    while_kw: scanner.Token
-    left_paren: scanner.Token
+    while_kw: jack_scanner.Token
+    left_paren: jack_scanner.Token
     expression: Expression
-    right_paren: scanner.Token
-    left_curly: scanner.Token
-    right_curly: scanner.Token
+    right_paren: jack_scanner.Token
+    left_curly: jack_scanner.Token
+    right_curly: jack_scanner.Token
     statements: Statements
 
     def write_xml(self, file: typing.IO, indent: int = 0):

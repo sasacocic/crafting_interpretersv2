@@ -1,5 +1,5 @@
-import py_jack.scanner as jack_scanner
-import py_jack.parser as jack_parser
+import py_jack.jack_scanner as jack_scanner
+import py_jack.jack_parser as jack_parser
 import py_jack.ast_nodes as jack_ast
 
 valid_programs = {

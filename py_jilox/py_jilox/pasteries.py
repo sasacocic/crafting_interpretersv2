@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import typing as t
 
-T = t.TypeVar("T")
-
 
 class Pastery(t.Protocol):
     def accept(self, visitor: PastryVisitor): ...

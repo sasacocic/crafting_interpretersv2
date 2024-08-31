@@ -2,13 +2,13 @@ from __future__ import annotations
 import typing
 
 if typing.TYPE_CHECKING:
-    import py_jilox.scanner as scanner
+    import py_jilox.lox_scanner as lox_scanner
 had_error = False
 
 
-def error_from_token(token: scanner.Token, message: str):
+def error_from_token(token: lox_scanner.Token, message: str):
     # import py_jilox.scanner as scanner
-    if token.token_type == scanner.TokenType.EOF:
+    if token.token_type == lox_scanner.TokenType.EOF:
         report(token.line, " at end", message)
     else:
         report(token.line, " at '" + token.lexeme + "'", message)

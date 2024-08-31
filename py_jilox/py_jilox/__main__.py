@@ -2,13 +2,13 @@ from __future__ import annotations
 import sys
 import typing
 from pathlib import Path
-import py_jilox.scanner as scan
+import py_jilox.lox_scanner as scan
 import py_jilox.error_handling as errors
 import logging.config
 import os
 import py_jilox.Expr as Expr
 import py_jilox.gen_exprs as gen_exprs
-import py_jilox.parser as parser_mod
+import py_jilox.lox_parser as parser_mod
 
 
 if typing.TYPE_CHECKING:

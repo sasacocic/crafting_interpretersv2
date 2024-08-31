@@ -1,7 +1,7 @@
 from __future__ import annotations
 import pathlib as pl
-import py_jack.scanner as scan
-import py_jack.parser as parse
+import py_jack.jack_scanner as scan
+import py_jack.jack_parser as parse
 import logging.config
 import typing
 import sys
