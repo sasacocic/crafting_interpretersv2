@@ -75,18 +75,35 @@ def scanner(file_path, output_file):
         raise FileNotFoundError(f"{file_path.resolve().name} not found")
 
 
+def get_jack_and_xml_files(directory: pl.Path) -> list[pl.Path]:
+    files: list[pl.Path] = []
+    for jack_file in directory.glob("*.jack"):
+        files.append(directory / jack_file)
+
+    return files
+
+
 @click.command()
 @click.argument("file-path")
 @click.option("--output-file", default="output.xml", help="name of the file to output")
 def parser(file_path: str, output_file: str):
     path = pl.Path(file_path)
     if path.exists():
-        src_code = path.read_text()
-        scanner = scan.Scanner(src_code)
-        tokens = scanner.scan()
-        parser = parse.Parser(tokens=tokens)
-        class_node = parser.parse()
-        class_node.write_xml(file_path=pl.Path(output_file), indent=1)
+        files: list[pl.Path] = []
+        if path.is_dir():
+            files.extend(get_jack_and_xml_files(path))
+        else:
+            files.append(path)
+        for f in files:
+            src_code = f.read_text()
+            scanner = scan.Scanner(src_code)
+            tokens = scanner.scan()
+            parser = parse.Parser(tokens=tokens)
+            class_node = parser.parse()
+            p = f.parent / "parsed"
+            p.mkdir(exist_ok=True)
+            output = f.name.replace(".jack", "OUT.xml")
+            class_node.write_xml(file_path=(p / output), indent=1)
     else:
         raise FileNotFoundError(f"{file_path.resolve().name} not found")
 

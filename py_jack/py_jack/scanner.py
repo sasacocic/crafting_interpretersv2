@@ -154,6 +154,7 @@ token_variants = {
         TokenType.LESS_THAN,
         TokenType.GREATER_THAN,
         TokenType.EQUAL,
+        TokenType.TILDE,
     ]),
 }
 

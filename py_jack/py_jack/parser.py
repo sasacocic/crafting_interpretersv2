@@ -3,7 +3,6 @@ from collections.abc import Iterator
 import py_jack.scanner as scanner
 import logging
 import itertools
-import functools
 import py_jack.ast_nodes
 
 LOGGER = logging.getLogger(__name__)
@@ -128,9 +127,10 @@ class Parser:
             raise Exception("invalid subroutine type")
 
         sub_return_type = self._next()
+        LOGGER.debug("asserting %s is void or a type", sub_return_type)
         assert (
             sub_return_type.token_type == scanner.TokenType.VOID
-            or sub_return_type.lexeme in scanner.type_tokens
+            or sub_return_type.token_type in scanner.type_tokens
         )
 
         routine_name = self._next()
@@ -231,15 +231,13 @@ class Parser:
         assert constant.token_type in scanner.literals
         return constant
 
-    def parse_statements(self):
-        statements: list[py_jack.ast_nodes.Statement] = []
-        top = self._peek_token_type()
-        print(f"top: {top.name} - {top in scanner.statements}")
+    def parse_statements(self) -> py_jack.ast_nodes.Statements:
+        statements: list[py_jack.ast_nodes.StatementType] = []
         while self._peek_token_type() in scanner.statements:
             statements.append(self.statement())
-        return statements
+        return py_jack.ast_nodes.Statements(statements=statements)
 
-    def statement(self) -> py_jack.ast_nodes.Statement:
+    def statement(self) -> py_jack.ast_nodes.StatementType:
         statement = None
         match self._peek_token_type():
             case scanner.TokenType.LET:
@@ -257,7 +255,7 @@ class Parser:
 
         return statement
 
-    def if_statement(self):
+    def if_statement(self) -> py_jack.ast_nodes.IfStatement:
         if_kw = self._next()
         l_paren = self._next()
         expression = self.expression()
@@ -288,7 +286,7 @@ class Parser:
             )
         return if_statement
 
-    def while_statement(self):
+    def while_statement(self) -> py_jack.ast_nodes.WhileStatement:
         while_kw = self._next()
         l_paren = self._next()
         expression = self.expression()
@@ -306,7 +304,7 @@ class Parser:
             right_curly=r_curly,
         )
 
-    def return_statement(self):
+    def return_statement(self) -> py_jack.ast_nodes.ReturnStatement:
         return_kw = self._next()
         if return_kw.token_type != scanner.TokenType.RETURN:
             raise Exception("expected return keyword - didn't get it")
@@ -322,7 +320,7 @@ class Parser:
             return_kw=return_kw, expression=expression, semicolon=semi_colon
         )
 
-    def do_statement(self):
+    def do_statement(self) -> py_jack.ast_nodes.DoStatement:
         do_kw = self._next()
         if do_kw.token_type != scanner.TokenType.DO and do_kw.lexeme != "do":
             raise Exception("expected do keyword - didn't get it")
@@ -334,7 +332,7 @@ class Parser:
             do_kw=do_kw, subroutine_call=subroutine, semicolon=semi_colon
         )
 
-    def let_statement(self):
+    def let_statement(self) -> py_jack.ast_nodes.LetStatement:
         LOGGER.info("parsing:let_statement")
         let_kw = self._next()
         if let_kw.token_type != scanner.TokenType.DO and let_kw.lexeme != "let":
@@ -358,6 +356,7 @@ class Parser:
                     semi_colon=semi_colon,
                     index_var=(left_square, optional_expr, right_square),
                 )
+
             case _:
                 equal = self._next()
                 expr = self.expression()
@@ -472,38 +471,42 @@ class Parser:
             case scanner.TokenType.DOT:
                 dot = self._next()
                 subroutine_name = self._next()
-                # left_paren = self._next()
+                left_paren = self._next()
                 expression_list = self.expression_list()
-                # right_paren = self._next()
+                right_paren = self._next()
                 return py_jack.ast_nodes.SubroutineCall(
                     subroutine_source=sub_name,
+                    dot=dot,
                     subroutine_name=subroutine_name,
                     expression_list=expression_list,
+                    left_paren=left_paren,
+                    right_paren=right_paren,
                 )
             case scanner.TokenType.LEFT_PAREN:
-                # left_paren = self._next()
+                left_paren = self._next()
                 expression_list = self.expression_list()
-                # right_paren = self._next()
+                right_paren = self._next()
                 return py_jack.ast_nodes.SubroutineCall(
-                    subroutine_name=sub_name, expression_list=expression_list
+                    subroutine_name=sub_name,
+                    expression_list=expression_list,
+                    left_paren=left_paren,
+                    right_paren=right_paren,
                 )
             case _:
                 raise Exception("should never happen")
 
     def expression_list(self):
         LOGGER.debug(("-----" * 8) + "[expression_list]" + ("-----" * 8))
-        left_paren = self._next()
-        if left_paren.token_type != scanner.TokenType.LEFT_PAREN:
-            raise Exception("Expected ( but got %s", left_paren)
         token = self._peek()
         matcher = token.token_type if token else None
         match matcher:
             case scanner.TokenType.RIGHT_PAREN:
-                right_paren = self._next()
                 return py_jack.ast_nodes.ExpressionList()
             case _:
                 expression = self.expression()
-                expressions = []
+                expressions: list[
+                    tuple[scanner.Token, py_jack.ast_nodes.Expression]
+                ] = []
                 while (
                     top := self._peek()
                 ) and top.token_type == scanner.TokenType.COMMA:
@@ -511,10 +514,7 @@ class Parser:
                     next_expression = self.expression()
                     expressions.append((comma, next_expression))
 
-                right_paren = self._next()
                 return py_jack.ast_nodes.ExpressionList(
                     expression=expression,
-                    expression_list=functools.reduce(
-                        lambda acc, val: acc + [val[1]], expressions, []
-                    ),
+                    expression_list=expressions,
                 )

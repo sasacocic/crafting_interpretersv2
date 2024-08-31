@@ -102,7 +102,7 @@ def test_subroutine_call():
     assert subroutine.name.lexeme == "dispose"
     assert subroutine.subroutine_variant.lexeme == "method"
     assert len(subroutine.subroutine_body.var_decs) == 0
-    assert len(subroutine.subroutine_body.statements) == 3
+    assert len(subroutine.subroutine_body.statements.statements) == 3
 
 
 def test_var_decs():
@@ -125,7 +125,7 @@ def test_var_decs():
     assert subroutine.name.lexeme == "main"
     assert subroutine.subroutine_variant.lexeme == "function"
     assert len(subroutine.subroutine_body.var_decs) == 2
-    assert len(subroutine.subroutine_body.statements) == 1
+    assert len(subroutine.subroutine_body.statements.statements) == 1
 
 
 def test_basic_program():

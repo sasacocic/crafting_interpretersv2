@@ -264,11 +264,10 @@ def test_term_expression():
 
 
 def test_empty_expression_list():
-    scanner = jack_scanner.Scanner(src="()")
+    scanner = jack_scanner.Scanner(src=")")
     scanner.scan()
 
     token_iter = iter(scanner.tokens)
-    assert next(token_iter).lexeme == "("
     assert next(token_iter).lexeme == ")"
     assert next(token_iter, None) == None
 
@@ -279,11 +278,10 @@ def test_empty_expression_list():
 
 
 def test_expression_list():
-    scanner = jack_scanner.Scanner(src='(some_var, 1, 9, "hello")')
+    scanner = jack_scanner.Scanner(src='some_var, 1, 9, "hello"')
     scanner.scan()
 
     token_iter = iter(scanner.tokens)
-    assert next(token_iter).lexeme == "("
     assert next(token_iter).lexeme == "some_var"
     assert next(token_iter).lexeme == ","
     assert next(token_iter).lexeme == "1"
@@ -291,7 +289,6 @@ def test_expression_list():
     assert next(token_iter).lexeme == "9"
     assert next(token_iter).lexeme == ","
     assert next(token_iter).lexeme == "hello"
-    assert next(token_iter).lexeme == ")"
     assert next(token_iter, None) == None
 
     parser = jack_parser.Parser(scanner.tokens)
@@ -359,6 +356,9 @@ def test_subroutine_method_call():
     subroutine_call = sub_call.term
     assert subroutine_call.subroutine_source.lexeme == "myclass"
     assert subroutine_call.subroutine_name.lexeme == "myMethod"
+    assert subroutine_call.dot.lexeme == "."
+    assert subroutine_call.left_paren.lexeme == "("
+    assert subroutine_call.right_paren.lexeme == ")"
 
 
 def test_general_expression():

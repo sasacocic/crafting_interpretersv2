@@ -131,9 +131,9 @@ def test_let_statement_from_parse_statement():
 
     statements = parser.parse_statements()
 
-    assert isinstance(statements, list)
-    assert len(statements) == 1
-    let_statement = statements[0]
+    assert isinstance(statements, jack_ast.Statements)
+    assert len(statements.statements) == 1
+    let_statement = statements.statements[0]
     assert isinstance(let_statement, jack_ast.LetStatement)
     assert let_statement.let_kw.lexeme == "let"
     assert let_statement.var_name.lexeme == "s"
@@ -171,11 +171,11 @@ def test_if_statement():
     assert if_statement.right_paren.lexeme == ")"
     assert if_statement.left_curly.lexeme == "{"
 
-    assert len(if_statement.statements) == 3
+    assert len(if_statement.statements.statements) == 3
     assert if_statement.optional_else[0].lexeme == "else"
     assert if_statement.optional_else[1].lexeme == "{"
     else_statements = if_statement.optional_else[2]
-    assert len(else_statements) == 3
+    assert len(else_statements.statements) == 3
     assert if_statement.optional_else[3].lexeme == "}"
 
 
@@ -201,9 +201,9 @@ def test_while_statement():
     assert while_statement.right_paren.lexeme == ")"
     assert while_statement.left_curly.lexeme == "{"
 
-    assert len(while_statement.statements) == 2
-    assert isinstance(while_statement.statements[0], jack_ast.LetStatement)
-    assert isinstance(while_statement.statements[1], jack_ast.DoStatement)
+    assert len(while_statement.statements.statements) == 2
+    assert isinstance(while_statement.statements.statements[0], jack_ast.LetStatement)
+    assert isinstance(while_statement.statements.statements[1], jack_ast.DoStatement)
     assert while_statement.right_curly.lexeme == "}"
 
 
@@ -239,9 +239,9 @@ def test_parse_statements():
 
     statements = parser.parse_statements()
 
-    top_while_statement = statements[0]
+    top_while_statement = statements.statements[0]
     assert isinstance(top_while_statement, jack_ast.WhileStatement)
-    while_statements = top_while_statement.statements
+    while_statements = top_while_statement.statements.statements
     assert len(while_statements) == 9
     assert isinstance(while_statements[5], jack_ast.IfStatement)
     # assert while_statement.while_kw.lexeme == "while"
