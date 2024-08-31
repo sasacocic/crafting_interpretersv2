@@ -127,9 +127,10 @@ class Parser:
             raise Exception("invalid subroutine type")
 
         sub_return_type = self._next()
+        LOGGER.debug("asserting %s is void or a type", sub_return_type)
         assert (
             sub_return_type.token_type == scanner.TokenType.VOID
-            or sub_return_type.lexeme in scanner.type_tokens
+            or sub_return_type.token_type in scanner.type_tokens
         )
 
         routine_name = self._next()
@@ -230,15 +231,13 @@ class Parser:
         assert constant.token_type in scanner.literals
         return constant
 
-    def parse_statements(self):
-        statements: list[py_jack.ast_nodes.Statement] = []
-        top = self._peek_token_type()
-        print(f"top: {top.name} - {top in scanner.statements}")
+    def parse_statements(self) -> py_jack.ast_nodes.Statements:
+        statements: list[py_jack.ast_nodes.StatementType] = []
         while self._peek_token_type() in scanner.statements:
             statements.append(self.statement())
-        return statements
+        return py_jack.ast_nodes.Statements(statements=statements)
 
-    def statement(self) -> py_jack.ast_nodes.Statement:
+    def statement(self) -> py_jack.ast_nodes.StatementType:
         statement = None
         match self._peek_token_type():
             case scanner.TokenType.LET:
@@ -256,7 +255,7 @@ class Parser:
 
         return statement
 
-    def if_statement(self) -> py_jack.ast_nodes.Statement:
+    def if_statement(self) -> py_jack.ast_nodes.IfStatement:
         if_kw = self._next()
         l_paren = self._next()
         expression = self.expression()
@@ -285,9 +284,9 @@ class Parser:
                 else_statements,
                 else_right_curly,
             )
-        return py_jack.ast_nodes.Statement(if_statement)
+        return if_statement
 
-    def while_statement(self) -> py_jack.ast_nodes.Statement:
+    def while_statement(self) -> py_jack.ast_nodes.WhileStatement:
         while_kw = self._next()
         l_paren = self._next()
         expression = self.expression()
@@ -295,39 +294,33 @@ class Parser:
         l_curly = self._next()
         statements = self.parse_statements()
         r_curly = self._next()
-        return py_jack.ast_nodes.Statement(
-            py_jack.ast_nodes.WhileStatement(
-                while_kw=while_kw,
-                left_paren=l_paren,
-                expression=expression,
-                right_paren=r_paren,
-                left_curly=l_curly,
-                statements=statements,
-                right_curly=r_curly,
-            )
+        return py_jack.ast_nodes.WhileStatement(
+            while_kw=while_kw,
+            left_paren=l_paren,
+            expression=expression,
+            right_paren=r_paren,
+            left_curly=l_curly,
+            statements=statements,
+            right_curly=r_curly,
         )
 
-    def return_statement(self) -> py_jack.ast_nodes.Statement:
+    def return_statement(self) -> py_jack.ast_nodes.ReturnStatement:
         return_kw = self._next()
         if return_kw.token_type != scanner.TokenType.RETURN:
             raise Exception("expected return keyword - didn't get it")
 
         if self._peek_token_type() == scanner.TokenType.SEMICOLON:
             semi_colon = self._next()
-            return py_jack.ast_nodes.Statement(
-                py_jack.ast_nodes.ReturnStatement(
-                    return_kw=return_kw, semicolon=semi_colon
-                )
+            return py_jack.ast_nodes.ReturnStatement(
+                return_kw=return_kw, semicolon=semi_colon
             )
         expression = self.expression()
         semi_colon = self._next()
-        return py_jack.ast_nodes.Statement(
-            py_jack.ast_nodes.ReturnStatement(
-                return_kw=return_kw, expression=expression, semicolon=semi_colon
-            )
+        return py_jack.ast_nodes.ReturnStatement(
+            return_kw=return_kw, expression=expression, semicolon=semi_colon
         )
 
-    def do_statement(self) -> py_jack.ast_nodes.Statement:
+    def do_statement(self) -> py_jack.ast_nodes.DoStatement:
         do_kw = self._next()
         if do_kw.token_type != scanner.TokenType.DO and do_kw.lexeme != "do":
             raise Exception("expected do keyword - didn't get it")
@@ -335,13 +328,11 @@ class Parser:
         subroutine_ident = self._next()
         subroutine = self.subroutine_call(sub_name=subroutine_ident)
         semi_colon = self._next()
-        return py_jack.ast_nodes.Statement(
-            py_jack.ast_nodes.DoStatement(
-                do_kw=do_kw, subroutine_call=subroutine, semicolon=semi_colon
-            )
+        return py_jack.ast_nodes.DoStatement(
+            do_kw=do_kw, subroutine_call=subroutine, semicolon=semi_colon
         )
 
-    def let_statement(self) -> py_jack.ast_nodes.Statement:
+    def let_statement(self) -> py_jack.ast_nodes.LetStatement:
         LOGGER.info("parsing:let_statement")
         let_kw = self._next()
         if let_kw.token_type != scanner.TokenType.DO and let_kw.lexeme != "let":
@@ -357,28 +348,25 @@ class Parser:
                 expr = self.expression()
                 semi_colon = self._next()
 
-                return py_jack.ast_nodes.Statement(
-                    statement=py_jack.ast_nodes.LetStatement(
-                        let_kw=let_kw,
-                        var_name=ident,
-                        equal=equal,
-                        expression=expr,
-                        semi_colon=semi_colon,
-                        index_var=(left_square, optional_expr, right_square),
-                    )
+                return py_jack.ast_nodes.LetStatement(
+                    let_kw=let_kw,
+                    var_name=ident,
+                    equal=equal,
+                    expression=expr,
+                    semi_colon=semi_colon,
+                    index_var=(left_square, optional_expr, right_square),
                 )
+
             case _:
                 equal = self._next()
                 expr = self.expression()
                 semi_colon = self._next()
-                return py_jack.ast_nodes.Statement(
-                    py_jack.ast_nodes.LetStatement(
-                        let_kw=let_kw,
-                        var_name=ident,
-                        equal=equal,
-                        expression=expr,
-                        semi_colon=semi_colon,
-                    )
+                return py_jack.ast_nodes.LetStatement(
+                    let_kw=let_kw,
+                    var_name=ident,
+                    equal=equal,
+                    expression=expr,
+                    semi_colon=semi_colon,
                 )
 
     # expression parsing

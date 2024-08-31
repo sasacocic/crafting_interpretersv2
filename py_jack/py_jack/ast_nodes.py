@@ -12,7 +12,17 @@ class XmlWriter(typing.Protocol):
         if token.token_type in scanner.token_variants["keywords"]:
             file.write(f"{' ' * indent}<keyword> {token.lexeme} </keyword>\n")
         elif token.token_type in scanner.token_variants["symbols"]:
-            file.write(f"{' ' * indent}<symbol> {token.lexeme} </symbol>\n")
+            match token.token_type:
+                case scanner.TokenType.AMPERSAND:
+                    file.write(f"{' ' * indent}<symbol> {'&amp;'} </symbol>\n")
+                case scanner.TokenType.GREATER_THAN:
+                    file.write(f"{' ' * indent}<symbol> {'&gt;'} </symbol>\n")
+                case scanner.TokenType.LESS_THAN:
+                    file.write(f"{' ' * indent}<symbol> {'&lt;'} </symbol>\n")
+                case scanner.TokenType() if token.lexeme == '"':
+                    file.write(f"{' ' * indent}<symbol> {'&quot;'} </symbol>\n")
+                case _:
+                    file.write(f"{' ' * indent}<symbol> {token.lexeme} </symbol>\n")
         elif token.token_type in [
             scanner.TokenType.INTEGER_CONSTANT,
             scanner.TokenType.STRING_CONSTANT,
@@ -94,8 +104,8 @@ class ClassVarDec(XmlWriter):
             self.write_token(self.var_name, file, indent=indent)
 
             for comma, var_name in self.var_names or []:
-                self.write_token(var_name, file, indent=indent)
                 self.write_token(comma, file, indent=indent)
+                self.write_token(var_name, file, indent=indent)
 
             self.write_string(
                 "symbol", self.semi_colon.lexeme, file=file, indent=indent
@@ -176,7 +186,7 @@ class VarDec(XmlWriter):
 class SubroutineBody(XmlWriter):
     left_squerly: scanner.Token
     var_decs: list[VarDec]
-    statements: list[Statement]
+    statements: Statements
     right_squerly: scanner.Token
 
     def write_xml(self, file: typing.IO, indent: int):
@@ -185,8 +195,7 @@ class SubroutineBody(XmlWriter):
             self.write_token(self.left_squerly, file, indent)
             for var_dec in self.var_decs:
                 var_dec.write_xml(file, indent)
-            for statement in self.statements:
-                statement.write_xml(file, indent)
+            self.statements.write_xml(file, indent)
             self.write_token(self.right_squerly, file, indent)
 
 
@@ -245,6 +254,7 @@ class ExpressionList(XmlWriter):
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
+            indent += 2
             if self.expression:
                 self.expression.write_xml(file, indent)
                 if self.expression_list:
@@ -281,16 +291,13 @@ type StatementType = (
 
 @dataclasses.dataclass
 class Statements(XmlWriter):
-    statement: StatementType
+    statements: list[StatementType]
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
             indent += 2
-            self.statement.write_xml(file, indent)
-
-
-# This is a hack - everywhere in code I use the work "Statement", but when writing xml we want to see "Statements"
-Statement = Statements
+            for statement in self.statements:
+                statement.write_xml(file, indent)
 
 
 @dataclasses.dataclass
@@ -354,9 +361,9 @@ class IfStatement(XmlWriter):
     right_paren: scanner.Token
     left_curly: scanner.Token
     right_curly: scanner.Token
-    statements: list[Statement] | None = None
+    statements: Statements
     optional_else: (
-        tuple[scanner.Token, scanner.Token, list[Statement], scanner.Token] | None
+        tuple[scanner.Token, scanner.Token, Statements, scanner.Token] | None
     ) = None
 
     def write_xml(self, file: typing.IO, indent: int = 0):
@@ -367,16 +374,14 @@ class IfStatement(XmlWriter):
             self.expression.write_xml(file, indent)
             self.write_token(self.right_paren, file, indent)
             self.write_token(self.left_curly, file, indent)
-            for statement in self.statements or []:
-                statement.write_xml(file, indent)
+            self.statements.write_xml(file, indent)
             self.write_token(self.right_curly, file, indent)
             if self.optional_else:
                 else_kw, left_curly, statements, right_curly = self.optional_else
-            self.write_token(else_kw, file, indent)
-            self.write_token(left_curly, file, indent)
-            for statement in statements:
-                statement.write_xml(file, indent)
-            self.write_token(right_curly, file, indent)
+                self.write_token(else_kw, file, indent)
+                self.write_token(left_curly, file, indent)
+                statements.write_xml(file, indent)
+                self.write_token(right_curly, file, indent)
 
 
 @dataclasses.dataclass
@@ -387,16 +392,15 @@ class WhileStatement(XmlWriter):
     right_paren: scanner.Token
     left_curly: scanner.Token
     right_curly: scanner.Token
-    statements: list[Statement] | None = None
+    statements: Statements
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
-            indent += 1
+            indent += 2
             self.write_token(self.while_kw, file, indent)
             self.write_token(self.left_paren, file, indent)
             self.expression.write_xml(file, indent)
             self.write_token(self.right_paren, file, indent)
             self.write_token(self.left_curly, file, indent)
-            for statement in self.statements or []:
-                statement.write_xml(file, indent)
+            self.statements.write_xml(file, indent)
             self.write_token(self.right_curly, file, indent)
