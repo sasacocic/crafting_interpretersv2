@@ -7,8 +7,9 @@ import py_jilox.error_handling as errors
 import logging.config
 import os
 import py_jilox.Expr as Expr
-import py_jilox.gen_exprs as gen_exprs
+import py_jilox.gen_exprs
 import py_jilox.lox_parser as parser_mod
+import click
 
 
 if typing.TYPE_CHECKING:
@@ -111,30 +112,33 @@ def test_ast_printer():
     print(AstPrinter().printer(expression))
 
 
-def main():
-    print(f"argv: {sys.argv}")
+@click.group()
+def lox():
+    pass
 
-    match len(sys.argv):
-        case 1:
-            print("beginning repl")
-            run_prompt()
-            exit(1)
-        case 2:
-            print(f"evaluating file: {sys.argv[1]}")
-            lox_file = Path(sys.argv[1])
-            if not lox_file.exists:
-                raise ValueError("file doesn't exist - this is the wrong error")
-            run_file(lox_file)
-        case 3:
-            if sys.argv[1] == "gen-attrs":
-                gen_exprs.generate_ast()
-            else:
-                # TODO: remove this and function
-                test_ast_printer()
-        case _:
-            print("don't know what to do. Too Many arguments.")
-            exit(64)
 
+@click.command()
+def repl():
+    run_prompt()
+
+
+@click.command()
+@click.argument("lox_file")
+def scanner(lox_file_path: str):
+    lox_file = Path(lox_file_path)
+    if not lox_file.exists():
+        raise ValueError("file doesn't exist - this is the wrong error")
+    run_file(lox_file)
+
+
+@click.command()
+def code_gen():
+    py_jilox.gen_exprs.generate_ast()
+
+
+lox.add_command(scanner)
+lox.add_command(code_gen)
+lox.add_command(repl)
 
 if __name__ == "__main__":
-    main()
+    lox()

@@ -26,7 +26,7 @@ class Parser:
         return self._equality()
 
     # TODO: this is suppose to return a tree - there is a type for this. I should be returning that.
-    def _equality(self):
+    def _equality(self) -> Expr.Expr:
         expr = self._comparison()
 
         while self.match(
