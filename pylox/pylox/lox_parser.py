@@ -1,7 +1,7 @@
 from __future__ import annotations
-import py_jilox.lox_scanner as lox_scanner
-import py_jilox.Expr as Expr
-import py_jilox.error_handling as errors
+import pylox.lox_scanner as lox_scanner
+import pylox.Expr as Expr
+import pylox.error_handling as errors
 
 
 class ParseError(Exception):

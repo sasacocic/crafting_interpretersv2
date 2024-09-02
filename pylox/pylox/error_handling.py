@@ -1,7 +1,7 @@
 from __future__ import annotations
 import sys
 
-from py_jilox.lox_scanner import Token, TokenType
+from pylox.lox_scanner import Token, TokenType
 
 had_error = False
 

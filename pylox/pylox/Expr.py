@@ -1,5 +1,6 @@
 from __future__ import annotations
-from py_jilox.tokens import Token
+from pylox.tokens import Token
+
 import typing
 
 

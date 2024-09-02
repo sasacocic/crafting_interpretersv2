@@ -2,13 +2,13 @@ from __future__ import annotations
 import sys
 import typing
 from pathlib import Path
-import py_jilox.error_handling as errors
-import py_jilox.lox_scanner as scan
+import pylox.error_handling as errors
+import pylox.lox_scanner as scan
 import logging.config
 import os
-import py_jilox.Expr as Expr
-import py_jilox.gen_exprs
-import py_jilox.lox_parser as parser_mod
+import pylox.Expr as Expr
+import pylox.gen_exprs
+import pylox.lox_parser as parser_mod
 import click
 
 
@@ -256,7 +256,7 @@ def scanner(lox_file_path: str):
 @click.command()
 def code_gen():
     LOGGER.debug("code_gen")
-    py_jilox.gen_exprs.generate_ast()
+    pylox.gen_exprs.generate_ast()
 
 
 lox.add_command(scanner)

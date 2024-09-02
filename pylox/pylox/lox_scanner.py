@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
-import py_jilox.error_handling as errors
-from py_jilox.tokens import Token, TokenType
+import pylox.error_handling as errors
+from pylox.tokens import Token, TokenType
 
 if typing.TYPE_CHECKING:
     pass
