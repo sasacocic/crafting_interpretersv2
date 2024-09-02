@@ -4,6 +4,9 @@ import pylox.Expr as Expr
 import pylox.error_handling as errors
 import logging
 
+import pylox.Stmnt as stmnt
+from pylox.tokens import TokenType
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,13 +23,29 @@ class Parser:
         self.tokens = tokens
         self.current = current
 
-    def parse(self) -> Expr.Expr | None:
-        try:
-            return self._expression()
-        except ParseError:
-            return None
+    def parse(self) -> list[stmnt.Stmnt]:
+        statements = []
+        while not self.is_at_end():
+            statements.append(self.statement())
+        return statements
 
-    def _expression(self):
+    def statement(self) -> stmnt.Stmnt:
+        if self.match(TokenType.PRINT):
+            return self.print_statement()
+
+        return self.expression_statement()
+
+    def print_statement(self) -> stmnt.Stmnt:
+        value = self.expression()
+        self.consume(TokenType.SEMICOLON, "Expect ';' after value.")
+        return stmnt.Print(value)
+
+    def expression_statement(self) -> stmnt.Stmnt:
+        expr = self.expression()
+        self.consume(TokenType.SEMICOLON, "Expect ';' after expression.")
+        return stmnt.Expression(expr)
+
+    def expression(self):
         return self._equality()
 
     # TODO: this is suppose to return a tree - there is a type for this. I should be returning that.
@@ -98,9 +117,9 @@ class Parser:
             )  # literal should take object but I make it take string
 
         if self.match(lox_scanner.TokenType.LEFT_PAREN):
-            expr = self._expression()
+            expr = self.expression()
             LOGGER.debug(f"current: {self.peek()}")
-            self._consume(
+            self.consume(
                 lox_scanner.TokenType.RIGHT_PAREN, "Expect ')' after expression."
             )
             return Expr.Grouping(expr)
@@ -114,7 +133,7 @@ class Parser:
                 return True
         return False
 
-    def _consume(
+    def consume(
         self, token_type: lox_scanner.TokenType, message: str
     ) -> lox_scanner.Token:
         if self.check(token_type):
