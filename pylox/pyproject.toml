@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "py-jilox"
+name = "pylox"
 version = "0.1.0"
 description = ""
 authors = ["sasa cocic <cocicsasa@gmail.com>"]

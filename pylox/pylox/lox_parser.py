@@ -1,7 +1,7 @@
 from __future__ import annotations
-import py_jilox.lox_scanner as lox_scanner
-import py_jilox.Expr as Expr
-import py_jilox.error_handling as errors
+import pylox.lox_scanner as lox_scanner
+import pylox.Expr as Expr
+import pylox.error_handling as errors
 
 
 class ParseError(Exception):
@@ -82,15 +82,15 @@ class Parser:
 
     def _primary(self):
         if self.match(lox_scanner.TokenType.FALSE):
-            return Expr.Literal("False")
+            return Expr.Literal(False)
         if self.match(lox_scanner.TokenType.TRUE):
-            return Expr.Literal("True")
+            return Expr.Literal(True)
         if self.match(lox_scanner.TokenType.NIL):
             return Expr.Literal("Nil")
 
         if self.match(lox_scanner.TokenType.NUMBER, lox_scanner.TokenType.STRING):
             return Expr.Literal(
-                self.previous().literal.__repr__()
+                self.previous().literal
             )  # literal should take object but I make it take string
 
         if self.match(lox_scanner.TokenType.LEFT_PAREN):
