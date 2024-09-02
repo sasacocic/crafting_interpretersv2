@@ -22,7 +22,10 @@ logging.config.dictConfig({
     "version": 1,
     "formatters": {"default": {"format": "[%(levelname)s][%(funcName)s] %(message)s"}},
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
-    "loggers": {"py_jilox.scanner": {"level": LOG_LEVEL or logging.DEBUG}},
+    "loggers": {
+        "pylox.scanner": {"level": LOG_LEVEL or logging.DEBUG},
+        "pylox.lox_parser": {"level": LOG_LEVEL or logging.DEBUG},
+    },
     "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.DEBUG},
 })
 
@@ -170,7 +173,7 @@ class AstPrinter(Expr.Visitor[str]):
         if not expr.value:
             return "nil"
 
-        return expr.value
+        return str(expr.value)
 
     def visit_UnaryExpr(self, expr: Expr.Unary):
         return self.parenthesize(expr.operator.lexeme, expr.right)
@@ -202,13 +205,14 @@ def run(lox_program: str) -> str:
         print(
             f"token: {token}, [literal,type[literal]]: {(token.literal, type(token.literal))}"
         )
+    LOGGER.debug("begin parsing")
     parser = parser_mod.Parser(tokens)
     expression = parser.parse()
 
     if errors.had_error or expression is None:
         return "there was some error"
 
-    # print(AstPrinter().printer(expressions))
+    print("printer:", AstPrinter().printer(expression))
     print(f"evaluating: {type(expression).__name__}")
     Interpreter().interpret(expression)
     return ""
@@ -259,7 +263,13 @@ def code_gen():
     pylox.gen_exprs.generate_ast()
 
 
+@click.command()
+def parser():
+    LOGGER.debug("parser")
+
+
 lox.add_command(scanner)
+lox.add_command(parser)
 lox.add_command(code_gen)
 lox.add_command(repl)
 

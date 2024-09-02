@@ -2,6 +2,10 @@ from __future__ import annotations
 import pylox.lox_scanner as lox_scanner
 import pylox.Expr as Expr
 import pylox.error_handling as errors
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ParseError(Exception):
@@ -86,7 +90,7 @@ class Parser:
         if self.match(lox_scanner.TokenType.TRUE):
             return Expr.Literal(True)
         if self.match(lox_scanner.TokenType.NIL):
-            return Expr.Literal("Nil")
+            return Expr.Literal(None)
 
         if self.match(lox_scanner.TokenType.NUMBER, lox_scanner.TokenType.STRING):
             return Expr.Literal(
@@ -95,6 +99,7 @@ class Parser:
 
         if self.match(lox_scanner.TokenType.LEFT_PAREN):
             expr = self._expression()
+            LOGGER.debug(f"current: {self.peek()}")
             self._consume(
                 lox_scanner.TokenType.RIGHT_PAREN, "Expect ')' after expression."
             )
@@ -113,7 +118,7 @@ class Parser:
         self, token_type: lox_scanner.TokenType, message: str
     ) -> lox_scanner.Token:
         if self.check(token_type):
-            self.advance()
+            return self.advance()
 
         raise self.error(self.peek(), message)
 
