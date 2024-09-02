@@ -3,7 +3,6 @@ This is simply a script used for generating classes in the Expr.py file.
 """
 
 from __future__ import annotations
-import sys
 import typing
 from pathlib import Path
 import logging.config
@@ -73,12 +72,6 @@ def define_ast(output_dir: Path, base_name: str, types: list[str]):
 
 
 def generate_ast():
-    # argv [script gen-exprs output-path]
-    if len(sys.argv) != 3:
-        # assert here?
-        print("gen-exprs expects an output directory to write exprs to")
-        exit(99)
-    # output_dir = sys.argv[2]
     output_dir = "py_jilox"
 
     define_ast(
@@ -87,7 +80,7 @@ def generate_ast():
         types=[
             "Binary | left: Expr , operator: Token , right: Expr",
             "Grouping | expression: Expr",
-            "Literal | value: str",
+            "Literal | value: object",
             "Unary | operator: Token, right: Expr",
         ],
     )
