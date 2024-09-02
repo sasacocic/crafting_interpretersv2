@@ -1,5 +1,5 @@
 from __future__ import annotations
-from py_jilox.lox_scanner import Token
+from py_jilox.tokens import Token
 import typing
 
 
@@ -36,8 +36,7 @@ class Grouping(Expr):
 
 
 class Literal(Expr):
-    # value: str is a problem!!!!!!
-    def __init__(self, value: str):
+    def __init__(self, value: object):
         self.value = value
 
     def accept[T](self, visitor: Visitor[T]):

@@ -186,7 +186,7 @@ def run_prompt():
         sys.stdout.write("> ")
         sys.stdout.flush()
         line = sys.stdin.readline()
-        if "stop" in line:
+        if any((exit_word == line for exit_word in ["exit\n", "stop\n", "exit()\n"])):
             break
         result = run(line)
         print(">> ", result)

@@ -55,7 +55,7 @@ def define_ast(output_dir: Path, base_name: str, types: list[str]):
     with write_path.open(mode="+w") as f:
         lines = [
             "from __future__ import annotations\n",
-            "from py_jilox.scanner import Token\n",
+            "from py_jilox.tokens import Token\n",
             "import typing\n",
             f"class {base_name}(typing.Protocol):\n",
             "   def accept[T](self, visitor: Visitor[T]) -> T:...\n\n",
