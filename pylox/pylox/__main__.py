@@ -2,6 +2,7 @@ from __future__ import annotations
 import sys
 import typing
 from pathlib import Path
+import pylox.tokens as tokens
 import pylox.error_handling as errors
 import pylox.lox_scanner as scan
 import logging.config
@@ -33,8 +34,51 @@ logging.config.dictConfig({
 LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
 
+class Environment:
+    """
+    Holds variable declarations
+    """
+
+    values: typing.ClassVar[dict[str, object]] = {}
+    enclosing: Environment | None
+
+    def __init__(self, enclosing: Environment | None = None):
+        self.enclosing = enclosing
+
+    def define(self, name: str, value: object):
+        LOGGER.debug(f"defined {name} = {value}")
+        self.values[name] = value
+        LOGGER.debug(f"env after assignment: {self.values}")
+
+    def get_variable(self, name: tokens.Token):
+        LOGGER.debug(f"attempting to read '{name.lexeme}' from env:")
+        LOGGER.debug(f"env: {self.values}")
+        if name.lexeme in self.values:
+            return self.values[name.lexeme]
+
+        raise errors.LoxRuntimeError(name, msg=f"Undefined variable '{name.lexeme}'")
+
+    def assign(self, name: tokens.Token, value: object):
+        if name.lexeme in self.values:
+            self.values[name.lexeme] = value
+            return
+
+        raise errors.LoxRuntimeError(name, f"Undefined variable {name.lexeme}.")
+
+
 class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
+    environment: Environment
+
+    def __init__(self):
+        self.environment = Environment()
+
     # Statements
+    def visit_VarStmnt(self, stmnt: stmnt.Var) -> None:
+        value: object | None = None
+        if stmnt.initializer != None:
+            value = self.evaluate(stmnt.initializer)
+
+        self.environment.define(stmnt.name.lexeme, value)
 
     def visit_ExpressionStmnt(self, stmnt: stmnt.Expression) -> None:
         self.evaluate(stmnt.expression)
@@ -44,6 +88,15 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         print(self.stringify(value))
 
     # Expressions
+
+    def visit_VariableExpr(self, expr: Expr.Variable) -> object:
+        return self.environment.get_variable(expr.name)
+
+    def visit_AssignExpr(self, expr: Expr.Assign) -> object:
+        value = self.evaluate(expr.value)
+        self.environment.assign(expr.name, value)
+        return value
+
     def visit_LiteralExpr(self, expr: Expr.Literal) -> object:
         LOGGER.info(f"Interpreting literal: {expr}")
         return expr.value

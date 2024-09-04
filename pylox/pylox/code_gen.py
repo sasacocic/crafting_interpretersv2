@@ -86,16 +86,22 @@ def generate_ast():
         Path(output_dir),
         base_name="Expr",
         types=[
+            "Assign | name: Token, value: Expr",
             "Binary | left: Expr , operator: Token , right: Expr",
             "Grouping | expression: Expr",
             "Literal | value: object",
             "Unary | operator: Token, right: Expr",
+            "Variable | name: Token",
         ],
     )
 
     define_ast(
         Path(output_dir),
         base_name="Stmnt",
-        types=["Expression | expression: Expr", "Print | expression: Expr"],
+        types=[
+            "Expression | expression: Expr",
+            "Print | expression: Expr",
+            "Var | name: Token, initializer: Expr",
+        ],
         additional_imports=["from pylox.Expr import Expr\n"],
     )
