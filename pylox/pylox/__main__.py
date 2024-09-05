@@ -2,12 +2,14 @@ from __future__ import annotations
 import sys
 import typing
 from pathlib import Path
+import pylox.tokens as tokens
 import pylox.error_handling as errors
 import pylox.lox_scanner as scan
 import logging.config
 import os
 import pylox.Expr as Expr
-import pylox.gen_exprs
+import pylox.Stmnt as stmnt
+import pylox.code_gen
 import pylox.lox_parser as parser_mod
 import click
 
@@ -16,33 +18,97 @@ if typing.TYPE_CHECKING:
     from pathlib import Path
 
 
-LOG_LEVEL: typing.Final[str | None] = os.environ.get("LOG_LEVEL")
+LOG_LEVEL: typing.Final[str | int] = os.environ.get("LOG_LEVEL") or logging.WARNING
 
 logging.config.dictConfig({
     "version": 1,
     "formatters": {"default": {"format": "[%(levelname)s][%(funcName)s] %(message)s"}},
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
     "loggers": {
-        "pylox.scanner": {"level": LOG_LEVEL or logging.DEBUG},
-        "pylox.lox_parser": {"level": LOG_LEVEL or logging.DEBUG},
+        "pylox.scanner": {"level": LOG_LEVEL},
+        "pylox.lox_parser": {"level": LOG_LEVEL},
     },
-    "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.DEBUG},
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
 })
 
 LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
 
-class Interpreter(Expr.Visitor[object]):
-    def check_number_operand(self, operator: scan.Token, operand: object):
-        if isinstance(operand, float):
-            return
-        raise errors.LoxRuntimeError(operator, "Operand must be a number.")
+class Environment:
+    """
+    Holds variable declarations
+    """
 
-    def check_number_operands(self, operator: scan.Token, left: object, right: object):
-        if isinstance(left, float) and isinstance(right, float):
+    values: typing.ClassVar[dict[str, object]] = {}
+    enclosing: Environment | None
+
+    def __init__(self, enclosing: Environment | None = None):
+        self.enclosing = enclosing
+
+    def define(self, name: str, value: object):
+        LOGGER.debug(f"defined {name} = {value}")
+        self.values[name] = value
+        LOGGER.debug(f"env after assignment: {self.values}")
+
+    def get_variable(self, name: tokens.Token):
+        LOGGER.debug(f"attempting to read '{name.lexeme}' from env:")
+        LOGGER.debug(f"env: {self.values}")
+        if name.lexeme in self.values:
+            return self.values[name.lexeme]
+
+        raise errors.LoxRuntimeError(name, msg=f"Undefined variable '{name.lexeme}'")
+
+    def assign(self, name: tokens.Token, value: object):
+        if name.lexeme in self.values:
+            self.values[name.lexeme] = value
             return
 
-        raise errors.LoxRuntimeError(operator, "Operands must be numbers.")
+        raise errors.LoxRuntimeError(name, f"Undefined variable {name.lexeme}.")
+
+
+class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
+    environment: Environment
+
+    def __init__(self):
+        self.environment = Environment()
+
+    # Statements
+
+    def visit_BlockStmnt(self, stmnt: stmnt.Block) -> None:
+        self.execute_block(stmnt.statements, Environment(self.environment))
+
+    def execute_block(self, statements: list[stmnt.Stmnt], environment: Environment):
+        previous = self.environment
+        try:
+            self.environment = environment
+            for statement in statements:
+                self.execute(statement)
+        finally:
+            self.environment = previous
+
+    def visit_VarStmnt(self, stmnt: stmnt.Var) -> None:
+        value: object | None = None
+        if stmnt.initializer != None:
+            value = self.evaluate(stmnt.initializer)
+
+        self.environment.define(stmnt.name.lexeme, value)
+
+    def visit_ExpressionStmnt(self, stmnt: stmnt.Expression) -> None:
+        self.evaluate(stmnt.expression)
+
+    def visit_PrintStmnt(self, stmnt: stmnt.Print) -> None:
+        value = self.evaluate(stmnt.expression)
+        print(self.stringify(value))
+
+    # Expressions
+
+    def visit_VariableExpr(self, expr: Expr.Variable) -> object:
+        return self.environment.get_variable(expr.name)
+
+    def visit_AssignExpr(self, expr: Expr.Assign) -> object:
+        value = self.evaluate(expr.value)
+        self.environment.assign(expr.name, value)
+        return value
 
     def visit_LiteralExpr(self, expr: Expr.Literal) -> object:
         LOGGER.info(f"Interpreting literal: {expr}")
@@ -138,10 +204,24 @@ class Interpreter(Expr.Visitor[object]):
 
         return str(obj)
 
-    def interpret(self, expression: Expr.Expr) -> None:
+    def check_number_operand(self, operator: scan.Token, operand: object):
+        if isinstance(operand, float):
+            return
+        raise errors.LoxRuntimeError(operator, "Operand must be a number.")
+
+    def check_number_operands(self, operator: scan.Token, left: object, right: object):
+        if isinstance(left, float) and isinstance(right, float):
+            return
+
+        raise errors.LoxRuntimeError(operator, "Operands must be numbers.")
+
+    def execute(self, statement: stmnt.Stmnt):
+        statement.accept(self)
+
+    def interpret(self, statements: list[stmnt.Stmnt]) -> None:
         try:
-            value = self.evaluate(expression)
-            print(self.stringify(value))
+            for statement in statements:
+                self.execute(statement)
         except errors.LoxRuntimeError as e:
             errors.runtime_error(e)
             print("this is an error. I need to fix this message")
@@ -201,28 +281,15 @@ def run(lox_program: str) -> str:
     scanner = scan.Scanner(lox_program)
     tokens = scanner.scan_tokens()
 
-    for token in tokens:
-        print(
-            f"token: {token}, [literal,type[literal]]: {(token.literal, type(token.literal))}"
-        )
     LOGGER.debug("begin parsing")
     parser = parser_mod.Parser(tokens)
-    expression = parser.parse()
+    statements = parser.parse()
 
-    if errors.had_error or expression is None:
+    if errors.had_error or statements is None:
         return "there was some error"
 
-    print("printer:", AstPrinter().printer(expression))
-    print(f"evaluating: {type(expression).__name__}")
-    Interpreter().interpret(expression)
+    Interpreter().interpret(statements)
     return ""
-
-
-def run_file(path: Path):
-    print(f"running the file: {path.resolve()}")
-
-    # I believe read_text will read it in as utf-8
-    run(path.read_text())
 
 
 def test_ast_printer():
@@ -260,7 +327,7 @@ def scanner(lox_file_path: str):
 @click.command()
 def code_gen():
     LOGGER.debug("code_gen")
-    pylox.gen_exprs.generate_ast()
+    pylox.code_gen.generate_ast()
 
 
 @click.command()
@@ -268,10 +335,22 @@ def parser():
     LOGGER.debug("parser")
 
 
+@click.command()
+@click.argument("lox_file")
+def run_file(lox_file):
+    src_file = Path(lox_file)
+    if not src_file.exists():
+        raise FileNotFoundError(f"{lox_file} - does not exist")
+
+    run(src_file.read_text())
+
+
 lox.add_command(scanner)
 lox.add_command(parser)
 lox.add_command(code_gen)
 lox.add_command(repl)
+lox.add_command(run_file)
+
 
 if __name__ == "__main__":
     lox()

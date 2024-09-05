@@ -4,6 +4,9 @@ import pylox.Expr as Expr
 import pylox.error_handling as errors
 import logging
 
+import pylox.Stmnt as stmnt
+from pylox.tokens import TokenType
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,17 +23,77 @@ class Parser:
         self.tokens = tokens
         self.current = current
 
-    def parse(self) -> Expr.Expr | None:
-        try:
-            return self._expression()
-        except ParseError:
-            return None
+    def parse(self) -> list[stmnt.Stmnt]:
+        statements = []
+        while not self.is_at_end():
+            statements.append(self.declaration())
+        return statements
 
-    def _expression(self):
-        return self._equality()
+    def declaration(self) -> stmnt.Stmnt | None:
+        try:
+            if self.match(TokenType.VAR):
+                return self.var_declaration()
+            return self.statement()
+        except ParseError:
+            self.synchronize()
+
+    def var_declaration(self):
+        name = self.consume(TokenType.IDENTIFIER, "Expect variable name.")
+
+        initializer: Expr.Expr | None = None
+
+        if self.match(TokenType.EQUAL):
+            initializer = self.expression()
+
+        self.consume(TokenType.SEMICOLON, "Expect ';' after variable declaration")
+        return stmnt.Var(name, initializer)
+
+    def statement(self) -> stmnt.Stmnt:
+        if self.match(TokenType.PRINT):
+            return self.print_statement()
+        if self.match(TokenType.LEFT_BRACE):
+            return stmnt.Block(self.block())
+
+        return self.expression_statement()
+
+    def block(self) -> list[stmnt.Stmnt]:
+        statements = []
+
+        while not self.check(TokenType.RIGHT_BRACE) and not self.is_at_end():
+            statements.append(self.declaration())
+
+        self.consume(TokenType.RIGHT_BRACE, "Expect '}' after block.")
+        return statements
+
+    def print_statement(self) -> stmnt.Stmnt:
+        value = self.expression()
+        self.consume(TokenType.SEMICOLON, "Expect ';' after value.")
+        return stmnt.Print(value)
+
+    def expression_statement(self) -> stmnt.Stmnt:
+        expr = self.expression()
+        self.consume(TokenType.SEMICOLON, "Expect ';' after expression.")
+        return stmnt.Expression(expr)
+
+    def expression(self):
+        return self.assignment()
+
+    def assignment(self):
+        expr = self.equality()
+
+        if self.match(TokenType.EQUAL):
+            equals = self.previous()
+            value = self.assignment()
+
+            if isinstance(expr, Expr.Variable):
+                name = expr.name
+                return Expr.Assign(name, value)
+
+            errors.error_from_token(equals, "Invalid assignment target.")
+        return expr
 
     # TODO: this is suppose to return a tree - there is a type for this. I should be returning that.
-    def _equality(self) -> Expr.Expr:
+    def equality(self) -> Expr.Expr:
         expr = self._comparison()
 
         while self.match(
@@ -82,9 +145,9 @@ class Parser:
             right = self._unary()
             return Expr.Unary(operator, right)
 
-        return self._primary()
+        return self.primary()
 
-    def _primary(self):
+    def primary(self):
         if self.match(lox_scanner.TokenType.FALSE):
             return Expr.Literal(False)
         if self.match(lox_scanner.TokenType.TRUE):
@@ -97,10 +160,13 @@ class Parser:
                 self.previous().literal
             )  # literal should take object but I make it take string
 
+        if self.match(TokenType.IDENTIFIER):
+            return Expr.Variable(self.previous())
+
         if self.match(lox_scanner.TokenType.LEFT_PAREN):
-            expr = self._expression()
+            expr = self.expression()
             LOGGER.debug(f"current: {self.peek()}")
-            self._consume(
+            self.consume(
                 lox_scanner.TokenType.RIGHT_PAREN, "Expect ')' after expression."
             )
             return Expr.Grouping(expr)
@@ -114,7 +180,7 @@ class Parser:
                 return True
         return False
 
-    def _consume(
+    def consume(
         self, token_type: lox_scanner.TokenType, message: str
     ) -> lox_scanner.Token:
         if self.check(token_type):
