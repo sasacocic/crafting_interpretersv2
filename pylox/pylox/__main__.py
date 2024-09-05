@@ -73,6 +73,19 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         self.environment = Environment()
 
     # Statements
+
+    def visit_BlockStmnt(self, stmnt: stmnt.Block) -> None:
+        self.execute_block(stmnt.statements, Environment(self.environment))
+
+    def execute_block(self, statements: list[stmnt.Stmnt], environment: Environment):
+        previous = self.environment
+        try:
+            self.environment = environment
+            for statement in statements:
+                self.execute(statement)
+        finally:
+            self.environment = previous
+
     def visit_VarStmnt(self, stmnt: stmnt.Var) -> None:
         value: object | None = None
         if stmnt.initializer != None:

@@ -99,6 +99,7 @@ def generate_ast():
         Path(output_dir),
         base_name="Stmnt",
         types=[
+            "Block | statements: list[Stmnt]",
             "Expression | expression: Expr",
             "Print | expression: Expr",
             "Var | name: Token, initializer: Expr",
