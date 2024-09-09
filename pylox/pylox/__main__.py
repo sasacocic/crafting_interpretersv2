@@ -74,6 +74,12 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
 
     # Statements
 
+    def visit_WhileStmnt(self, stmnt: stmnt.While) -> None:
+        while self.is_truthy(self.evaluate(stmnt.condition)):
+            self.execute(stmnt.body)
+
+        return None
+
     def visit_BlockStmnt(self, stmnt: stmnt.Block) -> None:
         self.execute_block(stmnt.statements, Environment(self.environment))
 
@@ -100,7 +106,26 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         value = self.evaluate(stmnt.expression)
         print(self.stringify(value))
 
+    def visit_IfStmnt(self, stmnt: stmnt.If) -> None:
+        if self.is_truthy(self.evaluate(stmnt.condition)):
+            self.execute(stmnt.then_branch)
+        elif stmnt.else_branch is not None:
+            self.execute(stmnt.else_branch)
+        return None
+
     # Expressions
+
+    def visit_LogicalExpr(self, expr: Expr.Logical) -> object:
+        left = self.evaluate(expr.left)
+
+        if expr.operator.token_type == tokens.TokenType.OR:
+            if self.is_truthy(expr.left):
+                return left
+        else:
+            if not self.is_truthy(expr.left):
+                return left
+
+        return self.evaluate(expr.right)
 
     def visit_VariableExpr(self, expr: Expr.Variable) -> object:
         return self.environment.get_variable(expr.name)
@@ -173,6 +198,9 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
             case _:
                 return None  # should never happen
 
+    def execute(self, statement: stmnt.Stmnt):
+        statement.accept(self)
+
     def evaluate(self, expr: Expr.Expr):
         return expr.accept(self)
 
@@ -214,9 +242,6 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
             return
 
         raise errors.LoxRuntimeError(operator, "Operands must be numbers.")
-
-    def execute(self, statement: stmnt.Stmnt):
-        statement.accept(self)
 
     def interpret(self, statements: list[stmnt.Stmnt]) -> None:
         try:

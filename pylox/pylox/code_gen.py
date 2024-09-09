@@ -29,7 +29,7 @@ def define_visitor(f: io.TextIOWrapper, base_name: str, types: list[str]):
     f.write("class Visitor[T]:\n")
 
     for typee in types:
-        type_name = typee.split("|")[0].strip()
+        type_name = typee.split("@")[0].strip()
 
         f.write(
             f"   def visit_{type_name + base_name}(self, {base_name.lower()}:{type_name}) -> T:...\n\n"
@@ -73,7 +73,7 @@ def define_ast(
 
         define_visitor(f, base_name, types)
         for typee in types:
-            class_name, fields = typee.split("|")
+            class_name, fields = typee.split("@")
             class_name = class_name.strip()
             fields = fields.strip()
             define_type(f, base_name, class_name, fields)
@@ -86,12 +86,13 @@ def generate_ast():
         Path(output_dir),
         base_name="Expr",
         types=[
-            "Assign | name: Token, value: Expr",
-            "Binary | left: Expr , operator: Token , right: Expr",
-            "Grouping | expression: Expr",
-            "Literal | value: object",
-            "Unary | operator: Token, right: Expr",
-            "Variable | name: Token",
+            "Assign @ name: Token, value: Expr",
+            "Binary @ left: Expr , operator: Token , right: Expr",
+            "Grouping @ expression: Expr",
+            "Literal @ value: object",
+            "Logical @ left: Expr, operator: Token, right: Expr",
+            "Unary @ operator: Token, right: Expr",
+            "Variable @ name: Token",
         ],
     )
 
@@ -99,10 +100,12 @@ def generate_ast():
         Path(output_dir),
         base_name="Stmnt",
         types=[
-            "Block | statements: list[Stmnt]",
-            "Expression | expression: Expr",
-            "Print | expression: Expr",
-            "Var | name: Token, initializer: Expr",
+            "Block @ statements: list[Stmnt]",
+            "Expression @ expression: Expr",
+            "If @ condition: Expr, then_branch: Stmnt, else_branch: Stmnt | None",
+            "Print @ expression: Expr",
+            "Var @ name: Token, initializer: Expr",
+            "While @ condition: Expr, body: Stmnt",
         ],
         additional_imports=["from pylox.Expr import Expr\n"],
     )

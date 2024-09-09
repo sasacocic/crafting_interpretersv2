@@ -49,12 +49,74 @@ class Parser:
         return stmnt.Var(name, initializer)
 
     def statement(self) -> stmnt.Stmnt:
+        if self.match(TokenType.FOR):
+            return self.for_statement()
+        if self.match(TokenType.IF):
+            return self.if_statement()
         if self.match(TokenType.PRINT):
             return self.print_statement()
+        if self.match(TokenType.WHILE):
+            return self.while_statement()
         if self.match(TokenType.LEFT_BRACE):
             return stmnt.Block(self.block())
 
         return self.expression_statement()
+
+    def for_statement(self):
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'")
+
+        initializer = None
+        if self.match(TokenType.SEMICOLON):
+            pass
+        elif self.match(TokenType.VAR):
+            initializer = self.var_declaration()
+        else:
+            initializer = self.expression_statement()
+
+        condition = None
+        if not self.check(TokenType.SEMICOLON):
+            condition = self.expression()
+        self.consume(TokenType.SEMICOLON, "Expect ';' after loop condition")
+
+        increment = None
+
+        if not self.check(TokenType.RIGHT_PAREN):
+            increment = self.expression()
+
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.")
+
+        body = self.statement()
+        if increment is not None:
+            body = stmnt.Block([body, stmnt.Expression(increment)])
+
+        if condition is None:
+            condition = Expr.Literal(True)
+            body = stmnt.While(condition, body)
+
+        if initializer is not None:
+            body = stmnt.Block([initializer, body])
+
+        return body
+
+    def while_statement(self):
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'")
+        condition = self.expression()
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition")
+        body = self.statement()
+
+        return stmnt.While(condition, body)
+
+    def if_statement(self):
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'")
+        condition = self.expression()
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition")
+
+        then_branch = self.statement()
+        else_branch = None
+        if self.match(TokenType.ELSE):
+            else_branch = self.statement()
+
+        return stmnt.If(condition, then_branch, else_branch)
 
     def block(self) -> list[stmnt.Stmnt]:
         statements = []
@@ -79,7 +141,8 @@ class Parser:
         return self.assignment()
 
     def assignment(self):
-        expr = self.equality()
+        # expr = self.equality()
+        expr = self.or_()
 
         if self.match(TokenType.EQUAL):
             equals = self.previous()
@@ -90,6 +153,26 @@ class Parser:
                 return Expr.Assign(name, value)
 
             errors.error_from_token(equals, "Invalid assignment target.")
+        return expr
+
+    def or_(self):
+        expr = self.and_()
+
+        while self.match(TokenType.OR):
+            operator = self.previous()
+            right = self.and_()
+            expr = Expr.Logical(expr, operator, right)
+
+        return expr
+
+    def and_(self):
+        expr = self.equality()
+
+        while self.match(TokenType.AND):
+            operator = self.previous()
+            right = self.equality()
+            expr = Expr.Logical(expr, operator, right)
+
         return expr
 
     # TODO: this is suppose to return a tree - there is a type for this. I should be returning that.
