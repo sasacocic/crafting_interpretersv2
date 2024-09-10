@@ -10,9 +10,13 @@ class Visitor[T]:
 
    def visit_ExpressionStmnt(self, stmnt:Expression) -> T:...
 
+   def visit_FunctionStmnt(self, stmnt:Function) -> T:...
+
    def visit_IfStmnt(self, stmnt:If) -> T:...
 
    def visit_PrintStmnt(self, stmnt:Print) -> T:...
+
+   def visit_ReturnStmnt(self, stmnt:Return) -> T:...
 
    def visit_VarStmnt(self, stmnt:Var) -> T:...
 
@@ -28,6 +32,13 @@ class Expression(Stmnt):
       self.expression = expression
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_ExpressionStmnt(self)
+class Function(Stmnt):
+   def __init__(self, name: Token, params: list[Token], body: list[Stmnt]):
+      self.name = name
+      self.params = params
+      self.body = body
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_FunctionStmnt(self)
 class If(Stmnt):
    def __init__(self, condition: Expr, then_branch: Stmnt, else_branch: Stmnt | None):
       self.condition = condition
@@ -40,6 +51,12 @@ class Print(Stmnt):
       self.expression = expression
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_PrintStmnt(self)
+class Return(Stmnt):
+   def __init__(self, keyword: Token, value: Expr | None):
+      self.keyword = keyword
+      self.value = value
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_ReturnStmnt(self)
 class Var(Stmnt):
    def __init__(self, name: Token, initializer: Expr):
       self.name = name

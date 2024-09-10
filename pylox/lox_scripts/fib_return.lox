@@ -1,0 +1,37 @@
+fun fib(n) {
+  if (n <= 1){
+    return n;
+  }
+
+  if (n <= 1){
+    print "this should never happend because the previous thing returned";
+  }
+
+
+  var two =  fib(n - 2);
+  var one = fib(n - 1);
+  return  two + one ;
+}
+
+for (var i = 0; i < 20; i = i + 1) {
+  print fib(i);
+}
+
+
+
+
+
+
+// fun tester(n) {
+//   if (n < 0){
+//     return ;
+//   }
+// 
+//   tester(n - 50);
+// 
+//   return n;
+// }
+// 
+// 
+// print tester(1)
+

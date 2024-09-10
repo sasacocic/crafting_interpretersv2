@@ -12,6 +12,7 @@ import pylox.Stmnt as stmnt
 import pylox.code_gen
 import pylox.lox_parser as parser_mod
 import click
+import time
 
 
 if typing.TYPE_CHECKING:
@@ -39,11 +40,12 @@ class Environment:
     Holds variable declarations
     """
 
-    values: typing.ClassVar[dict[str, object]] = {}
+    values: dict[str, object]
     enclosing: Environment | None
 
     def __init__(self, enclosing: Environment | None = None):
         self.enclosing = enclosing
+        self.values = {}
 
     def define(self, name: str, value: object):
         LOGGER.debug(f"defined {name} = {value}")
@@ -53,8 +55,12 @@ class Environment:
     def get_variable(self, name: tokens.Token):
         LOGGER.debug(f"attempting to read '{name.lexeme}' from env:")
         LOGGER.debug(f"env: {self.values}")
+
         if name.lexeme in self.values:
             return self.values[name.lexeme]
+
+        if self.enclosing is not None:
+            return self.enclosing.get_variable(name)
 
         raise errors.LoxRuntimeError(name, msg=f"Undefined variable '{name.lexeme}'")
 
@@ -63,23 +69,80 @@ class Environment:
             self.values[name.lexeme] = value
             return
 
+        if self.enclosing is not None:
+            self.enclosing.assign(name, value)
+            return
+
         raise errors.LoxRuntimeError(name, f"Undefined variable {name.lexeme}.")
 
 
 @typing.runtime_checkable
 class LoxCallable(typing.Protocol):
     # I guess you have to take self?
-    def call(self, interpreter: Interpreter, arguments: list[object]) -> None: ...
+    def call(
+        self, interpreter: Interpreter, arguments: list[object]
+    ) -> None | object: ...
     def arity(self) -> int: ...
 
 
+class LoxFunction(LoxCallable):
+    declaration: stmnt.Function
+
+    def __init__(self, declaration: stmnt.Function):
+        self.declaration = declaration
+
+    def call(self, interpreter: Interpreter, arguments: list[object]) -> None | object:
+        environment = Environment(interpreter.lox_globals)
+        for ind in range(len(self.declaration.params)):
+            environment.define(self.declaration.params[ind].lexeme, arguments[ind])
+
+        try:
+            interpreter.execute_block(self.declaration.body, environment)
+        except errors.ReturnException as return_value:
+            return return_value.value
+
+    def arity(self) -> int:
+        return len(self.declaration.params)
+
+    def __repr__(self) -> str:
+        return f"<fn {self.declaration.name.lexeme} >"
+
+
 class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
+    lox_globals: Environment
     environment: Environment
 
     def __init__(self):
-        self.environment = Environment()
+        class Anon(LoxCallable):
+            def arity(self):
+                return 0
+
+            def call(self, interpreter: Interpreter, arguments: list[object]):
+                return float(time.time())
+
+            def __repr__(self):
+                return "<native fn>"
+
+        self.lox_globals = Environment()
+        self.environment = self.lox_globals
+        self.lox_globals.define(
+            "clock",
+            Anon(),
+        )
 
     # Statements
+
+    def visit_ReturnStmnt(self, stmnt: stmnt.Return) -> None:
+        value = None
+        if stmnt.value is not None:
+            value = self.evaluate(stmnt.value)
+
+        raise errors.ReturnException(value)
+
+    def visit_FunctionStmnt(self, stmnt: stmnt.Function) -> None:
+        function = LoxFunction(stmnt)
+        self.environment.define(stmnt.name.lexeme, function)
+        return None
 
     def visit_WhileStmnt(self, stmnt: stmnt.While) -> None:
         while self.is_truthy(self.evaluate(stmnt.condition)):
