@@ -4,10 +4,10 @@
 Implementations of the lox and jack programming languages in python
 
 
-- Jack Scanner 🚧
-- Jack Parser ❌ TODO
+- Jack Scanner ✅
+- Jack Parser ✅
 - Lox Scanner ✅
-- Lox Parser 🚧
+- Lox Parser 🚧 wip
 
 
 
