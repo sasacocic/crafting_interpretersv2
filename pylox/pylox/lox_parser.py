@@ -91,7 +91,7 @@ class Parser:
 
         if condition is None:
             condition = Expr.Literal(True)
-            body = stmnt.While(condition, body)
+        body = stmnt.While(condition, body)
 
         if initializer is not None:
             body = stmnt.Block([initializer, body])
