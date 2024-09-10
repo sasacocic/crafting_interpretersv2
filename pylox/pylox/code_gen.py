@@ -88,6 +88,7 @@ def generate_ast():
         types=[
             "Assign @ name: Token, value: Expr",
             "Binary @ left: Expr , operator: Token , right: Expr",
+            "Call @ callee: Expr, paren: Token, arguments: list[Expr]",
             "Grouping @ expression: Expr",
             "Literal @ value: object",
             "Logical @ left: Expr, operator: Token, right: Expr",
@@ -102,8 +103,10 @@ def generate_ast():
         types=[
             "Block @ statements: list[Stmnt]",
             "Expression @ expression: Expr",
+            "Function @ name: Token, params: list[Token], body: list[Stmnt]",
             "If @ condition: Expr, then_branch: Stmnt, else_branch: Stmnt | None",
             "Print @ expression: Expr",
+            "Return @ keyword: Token, value: Expr | None",
             "Var @ name: Token, initializer: Expr",
             "While @ condition: Expr, body: Stmnt",
         ],

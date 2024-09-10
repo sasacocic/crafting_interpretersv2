@@ -9,6 +9,8 @@ class Visitor[T]:
 
    def visit_BinaryExpr(self, expr:Binary) -> T:...
 
+   def visit_CallExpr(self, expr:Call) -> T:...
+
    def visit_GroupingExpr(self, expr:Grouping) -> T:...
 
    def visit_LiteralExpr(self, expr:Literal) -> T:...
@@ -32,6 +34,13 @@ class Binary(Expr):
       self.right = right
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_BinaryExpr(self)
+class Call(Expr):
+   def __init__(self, callee: Expr, paren: Token, arguments: list[Expr]):
+      self.callee = callee
+      self.paren = paren
+      self.arguments = arguments
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_CallExpr(self)
 class Grouping(Expr):
    def __init__(self, expression: Expr):
       self.expression = expression

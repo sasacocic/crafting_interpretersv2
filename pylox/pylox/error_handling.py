@@ -36,3 +36,11 @@ def runtime_error(error: LoxRuntimeError):
     print(msg + f"\n[line {error.token.line}]", file=sys.stderr)
     global had_error
     had_error = True
+
+
+class ReturnException(Exception):
+    value: object
+
+    def __init__(self, value) -> None:
+        # super().__init__(None, None, False, False)  # do I even need this?
+        self.value = value
