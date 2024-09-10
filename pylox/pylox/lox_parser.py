@@ -213,22 +213,49 @@ class Parser:
         return expr
 
     def _factor(self):
-        expr = self._unary()
+        expr = self.unary()
 
         while self.match(lox_scanner.TokenType.SLASH, lox_scanner.TokenType.STAR):
             operator = self.previous()
-            right = self._unary()
+            right = self.unary()
             expr = Expr.Binary(expr, operator, right)
 
         return expr
 
-    def _unary(self):
+    def unary(self):
         if self.match(lox_scanner.TokenType.BANG, lox_scanner.TokenType.MINUS):
             operator = self.previous()
-            right = self._unary()
+            right = self.unary()
             return Expr.Unary(operator, right)
 
-        return self.primary()
+        return self.call()
+
+    def call(self) -> Expr.Expr:
+        expr = self.primary()
+
+        while True:
+            if self.match(TokenType.LEFT_PAREN):
+                expr = self.finish_call(expr)
+            else:
+                break
+
+        return expr
+
+    def finish_call(self, callee: Expr.Expr):
+        arguments = []
+
+        if not self.check(TokenType.RIGHT_PAREN):
+            # python doesn't have do while loop so always parse the first
+            # expression in the argument list
+            arguments.append(self.expression())
+            while self.match(TokenType.COMMA):
+                if len(arguments) >= 255:
+                    self.error(self.peek(), "Can't have more than 255 arguments")
+                arguments.append(self.expression())
+
+        paren = self.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.")
+
+        return Expr.Call(callee, paren, arguments)
 
     def primary(self):
         if self.match(lox_scanner.TokenType.FALSE):

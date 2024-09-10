@@ -66,6 +66,13 @@ class Environment:
         raise errors.LoxRuntimeError(name, f"Undefined variable {name.lexeme}.")
 
 
+@typing.runtime_checkable
+class LoxCallable(typing.Protocol):
+    # I guess you have to take self?
+    def call(self, interpreter: Interpreter, arguments: list[object]) -> None: ...
+    def arity(self) -> int: ...
+
+
 class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
     environment: Environment
 
@@ -114,6 +121,29 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         return None
 
     # Expressions
+
+    def visit_CallExpr(self, expr: Expr.Call) -> object:
+        callee = self.evaluate(expr.callee)
+
+        arguments = []
+        for arg in expr.arguments:
+            arguments.append(self.evaluate(arg))
+
+        function = callee
+
+        # TODO: I think this might break when running. Make sure it works.
+        if not isinstance(function, LoxCallable):
+            raise errors.LoxRuntimeError(
+                expr.paren, "can only call functions and classes."
+            )
+
+        if len(arguments) != function.arity():
+            raise errors.LoxRuntimeError(
+                expr.paren,
+                f"Expected {function.arity()} arguments but got {len(arguments)}.",
+            )
+
+        return function.call(self, arguments)
 
     def visit_LogicalExpr(self, expr: Expr.Logical) -> object:
         left = self.evaluate(expr.left)
@@ -199,9 +229,15 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
                 return None  # should never happen
 
     def execute(self, statement: stmnt.Stmnt):
+        """
+        Executes an Stmnt for side effects
+        """
         statement.accept(self)
 
     def evaluate(self, expr: Expr.Expr):
+        """
+        Evaluates an Expr and returns it's value
+        """
         return expr.accept(self)
 
     def is_truthy(self, obj: object):
