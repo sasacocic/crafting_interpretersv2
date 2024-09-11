@@ -87,12 +87,14 @@ class LoxCallable(typing.Protocol):
 
 class LoxFunction(LoxCallable):
     declaration: stmnt.Function
+    closure: Environment | None
 
-    def __init__(self, declaration: stmnt.Function):
+    def __init__(self, declaration: stmnt.Function, closure: Environment):
         self.declaration = declaration
+        self.closure = closure
 
     def call(self, interpreter: Interpreter, arguments: list[object]) -> None | object:
-        environment = Environment(interpreter.lox_globals)
+        environment = Environment(self.closure)
         for ind in range(len(self.declaration.params)):
             environment.define(self.declaration.params[ind].lexeme, arguments[ind])
 
@@ -140,7 +142,7 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         raise errors.ReturnException(value)
 
     def visit_FunctionStmnt(self, stmnt: stmnt.Function) -> None:
-        function = LoxFunction(stmnt)
+        function = LoxFunction(stmnt, self.environment)
         self.environment.define(stmnt.name.lexeme, function)
         return None
 
