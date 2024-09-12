@@ -82,6 +82,8 @@ def define_ast(
 def generate_ast():
     output_dir = "pylox"
 
+    # TODO: all of these CLASS_NAME @ field: field_type, - can be expressed as a regular expression - why don't
+    # I do that? It'll be a lot easier to do code gen from that.
     define_ast(
         Path(output_dir),
         base_name="Expr",
@@ -102,6 +104,7 @@ def generate_ast():
         base_name="Stmnt",
         types=[
             "Block @ statements: list[Stmnt]",
+            "Class @ name: Token, methods: list[Stmnt.Function]",
             "Expression @ expression: Expr",
             "Function @ name: Token, params: list[Token], body: list[Stmnt]",
             "If @ condition: Expr, then_branch: Stmnt, else_branch: Stmnt | None",

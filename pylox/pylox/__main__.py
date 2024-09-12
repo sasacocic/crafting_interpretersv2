@@ -99,6 +99,16 @@ class LoxCallable(typing.Protocol):
     def arity(self) -> int: ...
 
 
+class LoxClass:
+    name: str
+
+    def __init__(self, name) -> None:
+        self.name = name
+
+    def __repr__(self) -> str:
+        return self.name
+
+
 class LoxFunction(LoxCallable):
     declaration: stmnt.Function
     closure: Environment | None
@@ -138,6 +148,11 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
         self.interpreter = interpreter
         self.scopes = []
         self.current_function = FunctionType.NONE
+
+    def visit_ClassStmnt(self, stmnt: stmnt.Class) -> None:
+        self.declare(stmnt.name)
+        self.define(stmnt.name)
+        return None
 
     def visit_ExpressionStmnt(self, stmnt: stmnt.Expression) -> None:
         self.resolve_expr(stmnt.expression)
@@ -299,6 +314,11 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         self.lox_locals = {}
 
     # Statements
+
+    def visit_ClassStmnt(self, stmnt: stmnt.Class) -> None:
+        self.environment.define(stmnt.name.lexeme, None)
+        klass = LoxClass(stmnt.name.lexeme)
+        self.environment.assign(stmnt.name, klass)
 
     def visit_ReturnStmnt(self, stmnt: stmnt.Return) -> None:
         value = None

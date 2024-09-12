@@ -8,6 +8,8 @@ class Stmnt(typing.Protocol):
 class Visitor[T]:
    def visit_BlockStmnt(self, stmnt:Block) -> T:...
 
+   def visit_ClassStmnt(self, stmnt:Class) -> T:...
+
    def visit_ExpressionStmnt(self, stmnt:Expression) -> T:...
 
    def visit_FunctionStmnt(self, stmnt:Function) -> T:...
@@ -27,6 +29,12 @@ class Block(Stmnt):
       self.statements = statements
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_BlockStmnt(self)
+class Class(Stmnt):
+   def __init__(self, name: Token, methods: list[Stmnt.Function]):
+      self.name = name
+      self.methods = methods
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_ClassStmnt(self)
 class Expression(Stmnt):
    def __init__(self, expression: Expr):
       self.expression = expression
