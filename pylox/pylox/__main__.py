@@ -389,8 +389,6 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         return self.evaluate(expr.right)
 
     def visit_VariableExpr(self, expr: Expr.Variable) -> object:
-        # old implementation
-        # return self.environment.get_variable(expr.name)
         return self.lookup_variable(expr.name, expr)
 
     def lookup_variable(self, name: tokens.Token, expr: Expr.Expr):
