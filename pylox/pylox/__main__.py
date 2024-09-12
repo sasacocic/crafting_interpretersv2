@@ -4,6 +4,7 @@ import typing
 from pathlib import Path
 import pylox.tokens as tokens
 import pylox.error_handling as errors
+import enum
 import pylox.lox_scanner as scan
 import logging.config
 import os
@@ -75,6 +76,19 @@ class Environment:
 
         raise errors.LoxRuntimeError(name, f"Undefined variable {name.lexeme}.")
 
+    def get_at(self, distance: int, name: str):
+        return self.ancestor(distance).values.get(name)
+
+    def ancestor(self, distance: int):
+        environment = self
+        for _ in range(distance):
+            environment = environment.enclosing
+
+        return environment
+
+    def assign_at(self, distance: int, name: tokens.Token, value: object):
+        self.ancestor(distance).values[name.lexeme] = value
+
 
 @typing.runtime_checkable
 class LoxCallable(typing.Protocol):
@@ -87,12 +101,14 @@ class LoxCallable(typing.Protocol):
 
 class LoxFunction(LoxCallable):
     declaration: stmnt.Function
+    closure: Environment | None
 
-    def __init__(self, declaration: stmnt.Function):
+    def __init__(self, declaration: stmnt.Function, closure: Environment):
         self.declaration = declaration
+        self.closure = closure
 
     def call(self, interpreter: Interpreter, arguments: list[object]) -> None | object:
-        environment = Environment(interpreter.lox_globals)
+        environment = Environment(self.closure)
         for ind in range(len(self.declaration.params)):
             environment.define(self.declaration.params[ind].lexeme, arguments[ind])
 
@@ -108,9 +124,160 @@ class LoxFunction(LoxCallable):
         return f"<fn {self.declaration.name.lexeme} >"
 
 
+class FunctionType(enum.Enum):
+    NONE = 1
+    FUNCTION = 2
+
+
+class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
+    interpreter: Interpreter
+    scopes: list[dict[str, bool]]
+    current_function: FunctionType
+
+    def __init__(self, interpreter: Interpreter):
+        self.interpreter = interpreter
+        self.scopes = []
+        self.current_function = FunctionType.NONE
+
+    def visit_ExpressionStmnt(self, stmnt: stmnt.Expression) -> None:
+        self.resolve_expr(stmnt.expression)
+
+    def visit_IfStmnt(self, stmnt: stmnt.If) -> None:
+        self.resolve_expr(stmnt.condition)
+        self.resolve_stmnt(stmnt.then_branch)
+        if stmnt.else_branch is not None:
+            self.resolve_stmnt(stmnt.else_branch)
+
+    def visit_PrintStmnt(self, stmnt: stmnt.Print) -> None:
+        self.resolve_expr(stmnt.expression)
+
+    def visit_ReturnStmnt(self, stmnt: stmnt.Return) -> None:
+        if self.current_function == FunctionType.NONE:
+            errors.error_from_token(stmnt.keyword, "Can't return from top-level code.")
+
+        if stmnt.value is not None:
+            self.resolve_expr(stmnt.value)
+
+    def visit_WhileStmnt(self, stmnt: stmnt.While) -> None:
+        self.resolve_expr(stmnt.condition)
+        self.resolve_stmnt(stmnt.body)
+
+    def visit_BinaryExpr(self, expr: Expr.Binary) -> None:
+        self.resolve_expr(expr.left)
+        self.resolve_expr(expr.right)
+
+    def visit_CallExpr(self, expr: Expr.Call) -> None:
+        self.resolve_expr(expr.callee)
+
+        for argument in expr.arguments:
+            self.resolve_expr(argument)
+
+    def visit_GroupingExpr(self, expr: Expr.Grouping) -> None:
+        self.resolve_expr(expr.expression)
+
+    def visit_LiteralExpr(self, expr: Expr.Literal) -> None:
+        return None
+
+    def visit_LogicalExpr(self, expr: Expr.Logical) -> None:
+        self.resolve_expr(expr.left)
+        self.resolve_expr(expr.right)
+
+    def visit_UnaryExpr(self, expr: Expr.Unary) -> None:
+        self.resolve_expr(expr.right)
+
+    def visit_VariableExpr(self, expr: Expr.Variable) -> None:
+        if not len(self.scopes) == 0 and self.scopes[-1].get(expr.name.lexeme) == False:
+            errors.error_from_token(
+                expr.name, "Can't read local variable in its own initializer."
+            )
+
+        self.resolve_local(expr, expr.name)
+
+    def visit_FunctionStmnt(self, stmnt: stmnt.Function) -> None:
+        self.declare(stmnt.name)
+        self.define(stmnt.name)
+
+        self.resolve_function(stmnt, FunctionType.FUNCTION)
+        return None
+
+    def resolve_function(self, function: stmnt.Function, function_type: FunctionType):
+        enclosing_function = self.current_function
+        self.current_function = function_type
+        self.begin_scope()
+        for param in function.params:
+            self.declare(param)
+            self.define(param)
+
+        self.resolve(function.body)
+
+        self.end_scope()
+        self.current_function = enclosing_function
+
+    def visit_AssignExpr(self, expr: Expr.Assign) -> None:
+        self.resolve_expr(expr.value)
+        self.resolve_local(expr, expr.name)
+
+    def resolve_local(self, expr: Expr.Expr, name: tokens.Token):
+        for i in range(len(self.scopes) - 1, -1, -1):
+            if name.lexeme in self.scopes[i]:
+                num_scopes = len(self.scopes)
+                cur_scope = i
+                num_scopes - 1 - cur_scope
+                self.interpreter.resolve(expr, len(self.scopes) - 1 - i)
+                return
+
+    def declare(self, name: tokens.Token):
+        if len(self.scopes) == 0:
+            return
+
+        scope = self.scopes[-1]
+        if name.lexeme in scope:
+            errors.error_from_token(
+                name, "Already a variable with this name in this scope."
+            )
+        scope[name.lexeme] = False
+
+    def define(self, name: tokens.Token):
+        if len(self.scopes) == 0:
+            return
+
+        self.scopes[-1][name.lexeme] = True
+
+    def visit_VarStmnt(self, stmnt: stmnt.Var) -> None:
+        self.declare(stmnt.name)
+        if stmnt.initializer is not None:
+            self.resolve_expr(stmnt.initializer)
+
+        self.define(stmnt.name)
+        return None
+
+    def visit_BlockStmnt(self, stmnt: stmnt.Block) -> None:
+        self.begin_scope()
+        self.resolve(stmnt.statements)
+        self.end_scope()
+        return None
+
+    def resolve(self, statements: list[stmnt.Stmnt]):
+        for statement in statements:
+            self.resolve_stmnt(statement)
+
+    def resolve_stmnt(self, statement: stmnt.Stmnt):
+        statement.accept(self)
+
+    def resolve_expr(self, expr: Expr.Expr):
+        expr.accept(self)
+
+    def begin_scope(self):
+        self.scopes.append({})
+
+    def end_scope(self):
+        self.scopes.pop()
+
+
 class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
     lox_globals: Environment
     environment: Environment
+    lox_locals: dict[Expr.Expr, int]
 
     def __init__(self):
         class Anon(LoxCallable):
@@ -129,6 +296,7 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
             "clock",
             Anon(),
         )
+        self.lox_locals = {}
 
     # Statements
 
@@ -140,7 +308,7 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         raise errors.ReturnException(value)
 
     def visit_FunctionStmnt(self, stmnt: stmnt.Function) -> None:
-        function = LoxFunction(stmnt)
+        function = LoxFunction(stmnt, self.environment)
         self.environment.define(stmnt.name.lexeme, function)
         return None
 
@@ -221,11 +389,22 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         return self.evaluate(expr.right)
 
     def visit_VariableExpr(self, expr: Expr.Variable) -> object:
-        return self.environment.get_variable(expr.name)
+        return self.lookup_variable(expr.name, expr)
+
+    def lookup_variable(self, name: tokens.Token, expr: Expr.Expr):
+        distance = self.lox_locals.get(expr, None)
+        if distance is not None:
+            return self.environment.get_at(distance, name.lexeme)
+        else:
+            return self.lox_globals.get_variable(name)
 
     def visit_AssignExpr(self, expr: Expr.Assign) -> object:
         value = self.evaluate(expr.value)
-        self.environment.assign(expr.name, value)
+        distance = self.lox_locals.get(expr, None)
+        if distance is not None:
+            self.environment.assign_at(distance, expr.name, value)
+        else:
+            self.lox_globals.assign(expr.name, value)
         return value
 
     def visit_LiteralExpr(self, expr: Expr.Literal) -> object:
@@ -350,6 +529,9 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
             errors.runtime_error(e)
             print("this is an error. I need to fix this message")
 
+    def resolve(self, expr: Expr.Expr, depth: int):
+        self.lox_locals[expr] = depth
+
 
 class AstPrinter(Expr.Visitor[str]):
     def to_string(self, expr: Expr.Expr):
@@ -400,7 +582,7 @@ def run_prompt():
         errors.had_error = False
 
 
-def run(lox_program: str) -> str:
+def run(lox_program: str) -> str | None:
     LOGGER.debug("running program: %s", lox_program)
     scanner = scan.Scanner(lox_program)
     tokens = scanner.scan_tokens()
@@ -412,7 +594,14 @@ def run(lox_program: str) -> str:
     if errors.had_error or statements is None:
         return "there was some error"
 
-    Interpreter().interpret(statements)
+    interp = Interpreter()
+    resolver = Resolver(interp)
+    resolver.resolve(statements)
+
+    if errors.had_error:
+        return
+
+    interp.interpret(statements)
     return ""
 
 

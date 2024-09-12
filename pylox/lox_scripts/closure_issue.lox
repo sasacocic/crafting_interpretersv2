@@ -1,0 +1,26 @@
+
+
+
+
+
+
+var a = "global";
+
+
+{
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+
+  // will use a because we are defining closures to use lexical scope
+  // at there time of declaration
+  fun ShowNewA() {
+    print a;
+  }
+
+  showA();
+  ShowNewA();
+}
