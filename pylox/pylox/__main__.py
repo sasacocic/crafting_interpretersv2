@@ -132,10 +132,12 @@ class FunctionType(enum.Enum):
 class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
     interpreter: Interpreter
     scopes: list[dict[str, bool]]
-    current_function: FunctionType = FunctionType.NONE
+    current_function: FunctionType
 
     def __init__(self, interpreter: Interpreter):
         self.interpreter = interpreter
+        self.scopes = []
+        self.current_function = FunctionType.NONE
 
     def visit_ExpressionStmnt(self, stmnt: stmnt.Expression) -> None:
         self.resolve_expr(stmnt.expression)
@@ -218,9 +220,10 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
     def resolve_local(self, expr: Expr.Expr, name: tokens.Token):
         for i in range(len(self.scopes) - 1, -1, -1):
             if name.lexeme in self.scopes[i]:
-                self.interpreter.resolve(
-                    expr, len(self.scopes) - 1 - i
-                )  # TODO: come back and implement this
+                num_scopes = len(self.scopes)
+                cur_scope = i
+                num_scopes - 1 - cur_scope
+                self.interpreter.resolve(expr, len(self.scopes) - 1 - i)
                 return
 
     def declare(self, name: tokens.Token):
@@ -293,6 +296,7 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
             "clock",
             Anon(),
         )
+        self.lox_locals = {}
 
     # Statements
 
