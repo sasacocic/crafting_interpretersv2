@@ -189,7 +189,6 @@ class Parser:
         return self.assignment()
 
     def assignment(self):
-        # expr = self.equality()
         expr = self.or_()
 
         if self.match(TokenType.EQUAL):
@@ -199,6 +198,9 @@ class Parser:
             if isinstance(expr, Expr.Variable):
                 name = expr.name
                 return Expr.Assign(name, value)
+            elif isinstance(expr, Expr.Get):
+                get = expr
+                return Expr.Set(get.obj, get.name, value)
 
             errors.error_from_token(equals, "Invalid assignment target.")
         return expr
@@ -284,6 +286,11 @@ class Parser:
         while True:
             if self.match(TokenType.LEFT_PAREN):
                 expr = self.finish_call(expr)
+            elif self.match(TokenType.DOT):
+                name = self.consume(
+                    TokenType.IDENTIFIER, "Expect property name after '.'."
+                )
+                expr = Expr.Get(expr, name)
             else:
                 break
 
@@ -314,9 +321,10 @@ class Parser:
             return Expr.Literal(None)
 
         if self.match(lox_scanner.TokenType.NUMBER, lox_scanner.TokenType.STRING):
-            return Expr.Literal(
-                self.previous().literal
-            )  # literal should take object but I make it take string
+            return Expr.Literal(self.previous().literal)
+
+        if self.match(TokenType.THIS):
+            return Expr.This(self.previous())
 
         if self.match(TokenType.IDENTIFIER):
             return Expr.Variable(self.previous())

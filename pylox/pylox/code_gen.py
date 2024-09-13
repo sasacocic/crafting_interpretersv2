@@ -34,7 +34,6 @@ def define_visitor(f: io.TextIOWrapper, base_name: str, types: list[str]):
         f.write(
             f"   def visit_{type_name + base_name}(self, {base_name.lower()}:{type_name}) -> T:...\n\n"
         )
-        # f.write(f"   def visit_{type_name + base_name}(self, {type_name.lower()}:{type_name}):\n")
 
 
 def define_ast(
@@ -89,11 +88,14 @@ def generate_ast():
         base_name="Expr",
         types=[
             "Assign @ name: Token, value: Expr",
+            "Get @ obj: Expr, name: Token",
             "Binary @ left: Expr , operator: Token , right: Expr",
             "Call @ callee: Expr, paren: Token, arguments: list[Expr]",
             "Grouping @ expression: Expr",
             "Literal @ value: object",
             "Logical @ left: Expr, operator: Token, right: Expr",
+            "Set @ obj: Expr, name: Token, value: Expr",
+            "This @ keyword: Token",
             "Unary @ operator: Token, right: Expr",
             "Variable @ name: Token",
         ],
@@ -104,7 +106,7 @@ def generate_ast():
         base_name="Stmnt",
         types=[
             "Block @ statements: list[Stmnt]",
-            "Class @ name: Token, methods: list[Stmnt.Function]",
+            "Class @ name: Token, methods: list[Function]",
             "Expression @ expression: Expr",
             "Function @ name: Token, params: list[Token], body: list[Stmnt]",
             "If @ condition: Expr, then_branch: Stmnt, else_branch: Stmnt | None",

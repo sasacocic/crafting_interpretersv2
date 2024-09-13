@@ -7,6 +7,8 @@ class Expr(typing.Protocol):
 class Visitor[T]:
    def visit_AssignExpr(self, expr:Assign) -> T:...
 
+   def visit_GetExpr(self, expr:Get) -> T:...
+
    def visit_BinaryExpr(self, expr:Binary) -> T:...
 
    def visit_CallExpr(self, expr:Call) -> T:...
@@ -16,6 +18,10 @@ class Visitor[T]:
    def visit_LiteralExpr(self, expr:Literal) -> T:...
 
    def visit_LogicalExpr(self, expr:Logical) -> T:...
+
+   def visit_SetExpr(self, expr:Set) -> T:...
+
+   def visit_ThisExpr(self, expr:This) -> T:...
 
    def visit_UnaryExpr(self, expr:Unary) -> T:...
 
@@ -27,6 +33,12 @@ class Assign(Expr):
       self.value = value
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_AssignExpr(self)
+class Get(Expr):
+   def __init__(self, obj: Expr, name: Token):
+      self.obj = obj
+      self.name = name
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_GetExpr(self)
 class Binary(Expr):
    def __init__(self, left: Expr , operator: Token , right: Expr):
       self.left = left
@@ -58,6 +70,18 @@ class Logical(Expr):
       self.right = right
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_LogicalExpr(self)
+class Set(Expr):
+   def __init__(self, obj: Expr, name: Token, value: Expr):
+      self.obj = obj
+      self.name = name
+      self.value = value
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_SetExpr(self)
+class This(Expr):
+   def __init__(self, keyword: Token):
+      self.keyword = keyword
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_ThisExpr(self)
 class Unary(Expr):
    def __init__(self, operator: Token, right: Expr):
       self.operator = operator

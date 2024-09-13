@@ -30,7 +30,7 @@ class Block(Stmnt):
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_BlockStmnt(self)
 class Class(Stmnt):
-   def __init__(self, name: Token, methods: list[Stmnt.Function]):
+   def __init__(self, name: Token, methods: list[Function]):
       self.name = name
       self.methods = methods
    def accept[T](self, visitor: Visitor[T]):
