@@ -99,13 +99,82 @@ class LoxCallable(typing.Protocol):
     def arity(self) -> int: ...
 
 
+class LoxClass(LoxCallable):
+    name: str
+    methods: dict[str, LoxFunction]
+
+    def __init__(self, name, methods: dict[str, LoxFunction]) -> None:
+        self.name = name
+        self.methods = methods
+
+    def __repr__(self) -> str:
+        return self.name
+
+    def find_method(self, name: str):
+        if name in self.methods:
+            return self.methods.get(name, None)
+
+    def call(self, interpreter: Interpreter, arguments: list[object]) -> None | object:
+        initializer = self.find_method("init")
+        instance = LoxInstance(self)
+
+        if initializer is not None:
+            initializer.bind(instance).call(interpreter, arguments)
+        return instance
+
+    def arity(self) -> int:
+        initializer = self.find_method("init")
+        if initializer is None:
+            return 0
+        return initializer.arity()
+
+
+class LoxInstance:
+    klass: LoxClass
+    fields: dict[str, object]
+
+    def __init__(self, klass: LoxClass):
+        self.klass = klass
+        self.fields = {}
+
+    def __repr__(self):
+        return self.klass.name + " instance"
+
+    def get(self, name: tokens.Token):
+        if name.lexeme in self.fields:
+            return self.fields.get(name.lexeme, None)
+
+        method = self.klass.find_method(name.lexeme)
+        if method is not None:
+            return method.bind(self)
+
+        if method is not None:
+            return method
+
+        raise errors.LoxRuntimeError(name, f"Undefined property {name.lexeme}.")
+
+    def set(self, name: tokens.Token, value: object):
+        self.fields[name.lexeme] = value
+
+
 class LoxFunction(LoxCallable):
     declaration: stmnt.Function
     closure: Environment | None
+    is_initializer: bool
 
-    def __init__(self, declaration: stmnt.Function, closure: Environment):
+    def __init__(
+        self, declaration: stmnt.Function, closure: Environment, is_initializer: bool
+    ):
         self.declaration = declaration
         self.closure = closure
+        self.is_initializer = is_initializer
+
+    def bind(self, instance: LoxInstance):
+        environment = Environment(self.closure)
+
+        environment.define("this", instance)
+
+        return LoxFunction(self.declaration, environment, self.is_initializer)
 
     def call(self, interpreter: Interpreter, arguments: list[object]) -> None | object:
         environment = Environment(self.closure)
@@ -115,7 +184,13 @@ class LoxFunction(LoxCallable):
         try:
             interpreter.execute_block(self.declaration.body, environment)
         except errors.ReturnException as return_value:
+            if self.is_initializer:
+                return self.closure.get_at(0, "this")
+
             return return_value.value
+
+        if self.is_initializer:
+            return self.closure.get_at(0, "this")
 
     def arity(self) -> int:
         return len(self.declaration.params)
@@ -127,17 +202,60 @@ class LoxFunction(LoxCallable):
 class FunctionType(enum.Enum):
     NONE = 1
     FUNCTION = 2
+    METHOD = 3
+    INITIALIZER = 4
+
+
+class ClassType(enum.Enum):
+    NONE = 1
+    CLASS = 2
 
 
 class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
     interpreter: Interpreter
     scopes: list[dict[str, bool]]
     current_function: FunctionType
+    current_class: ClassType
 
     def __init__(self, interpreter: Interpreter):
         self.interpreter = interpreter
         self.scopes = []
         self.current_function = FunctionType.NONE
+        self.current_class = ClassType.NONE
+
+    def visit_ThisExpr(self, expr: Expr.This) -> None:
+        if self.current_class == ClassType.NONE:
+            errors.error_from_token(
+                expr.keyword, "Can't use 'this' outside of a class."
+            )
+            return None
+        self.resolve_local(expr, expr.keyword)
+
+    def visit_SetExpr(self, expr: Expr.Set) -> None:
+        self.resolve_expr(expr.value)
+        self.resolve_expr(expr.obj)
+
+    def visit_GetExpr(self, expr: Expr.Get) -> None:
+        self.resolve_expr(expr.obj)
+
+    def visit_ClassStmnt(self, stmnt: stmnt.Class) -> None:
+        enclosing_class = self.current_class
+        self.current_class = ClassType.CLASS
+        self.declare(stmnt.name)
+
+        self.begin_scope()
+        self.scopes[-1]["this"] = True
+
+        for method in stmnt.methods:
+            declaration = FunctionType.METHOD
+            if method.name.lexeme == "init":
+                declaration = FunctionType.INITIALIZER
+            self.resolve_function(method, declaration)
+        self.define(stmnt.name)
+
+        self.end_scope()
+        self.current_class = enclosing_class
+        return None
 
     def visit_ExpressionStmnt(self, stmnt: stmnt.Expression) -> None:
         self.resolve_expr(stmnt.expression)
@@ -156,6 +274,10 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
             errors.error_from_token(stmnt.keyword, "Can't return from top-level code.")
 
         if stmnt.value is not None:
+            if self.current_function == FunctionType.INITIALIZER:
+                errors.error_from_token(
+                    stmnt.keyword, "Can't return a value from an initializer."
+                )
             self.resolve_expr(stmnt.value)
 
     def visit_WhileStmnt(self, stmnt: stmnt.While) -> None:
@@ -300,6 +422,19 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
 
     # Statements
 
+    def visit_ClassStmnt(self, stmnt: stmnt.Class) -> None:
+        self.environment.define(stmnt.name.lexeme, None)
+        methods = {}
+
+        for method in stmnt.methods:
+            function = LoxFunction(
+                method, self.environment, method.name.lexeme == "init"
+            )
+            methods[method.name.lexeme] = function
+
+        klass = LoxClass(stmnt.name.lexeme, methods)
+        self.environment.assign(stmnt.name, klass)
+
     def visit_ReturnStmnt(self, stmnt: stmnt.Return) -> None:
         value = None
         if stmnt.value is not None:
@@ -308,7 +443,7 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         raise errors.ReturnException(value)
 
     def visit_FunctionStmnt(self, stmnt: stmnt.Function) -> None:
-        function = LoxFunction(stmnt, self.environment)
+        function = LoxFunction(stmnt, self.environment, False)
         self.environment.define(stmnt.name.lexeme, function)
         return None
 
@@ -352,6 +487,25 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         return None
 
     # Expressions
+
+    def visit_ThisExpr(self, expr: Expr.This) -> object:
+        return self.lookup_variable(expr.keyword, expr)
+
+    def visit_SetExpr(self, expr: Expr.Set) -> object:
+        obj = self.evaluate(expr.obj)
+
+        if not isinstance(obj, LoxInstance):
+            raise errors.LoxRuntimeError(expr.name, "Only instance have fields.")
+
+        value = self.evaluate(expr.value)
+        typing.cast(LoxInstance, obj).set(expr.name, value)
+        return value
+
+    def visit_GetExpr(self, expr: Expr.Get) -> object:
+        obj = self.evaluate(expr.obj)
+        if isinstance(obj, LoxInstance):
+            return obj.get(expr.name)
+        raise errors.LoxRuntimeError(expr.name, "Only instances have properties.")
 
     def visit_CallExpr(self, expr: Expr.Call) -> object:
         callee = self.evaluate(expr.callee)

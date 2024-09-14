@@ -33,11 +33,25 @@ class Parser:
         try:
             if self.match(TokenType.VAR):
                 return self.var_declaration()
+            if self.match(TokenType.CLASS):
+                return self.class_declaration()
             if self.match(TokenType.FUN):
                 return self.function("function")
             return self.statement()
         except ParseError:
             self.synchronize()
+
+    def class_declaration(self):
+        name = self.consume(TokenType.IDENTIFIER, "Expect class name.")
+        self.consume(TokenType.LEFT_BRACE, "Expect class name.")
+
+        methods = []
+        while not self.check(TokenType.RIGHT_BRACE) and not self.is_at_end():
+            methods.append(self.function("method"))
+
+        self.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.")
+
+        return stmnt.Class(name, methods)
 
     def function(self, kind: str):
         name = self.consume(TokenType.IDENTIFIER, "Expect " + kind + " name.")
@@ -175,7 +189,6 @@ class Parser:
         return self.assignment()
 
     def assignment(self):
-        # expr = self.equality()
         expr = self.or_()
 
         if self.match(TokenType.EQUAL):
@@ -185,6 +198,9 @@ class Parser:
             if isinstance(expr, Expr.Variable):
                 name = expr.name
                 return Expr.Assign(name, value)
+            elif isinstance(expr, Expr.Get):
+                get = expr
+                return Expr.Set(get.obj, get.name, value)
 
             errors.error_from_token(equals, "Invalid assignment target.")
         return expr
@@ -270,6 +286,11 @@ class Parser:
         while True:
             if self.match(TokenType.LEFT_PAREN):
                 expr = self.finish_call(expr)
+            elif self.match(TokenType.DOT):
+                name = self.consume(
+                    TokenType.IDENTIFIER, "Expect property name after '.'."
+                )
+                expr = Expr.Get(expr, name)
             else:
                 break
 
@@ -300,9 +321,10 @@ class Parser:
             return Expr.Literal(None)
 
         if self.match(lox_scanner.TokenType.NUMBER, lox_scanner.TokenType.STRING):
-            return Expr.Literal(
-                self.previous().literal
-            )  # literal should take object but I make it take string
+            return Expr.Literal(self.previous().literal)
+
+        if self.match(TokenType.THIS):
+            return Expr.This(self.previous())
 
         if self.match(TokenType.IDENTIFIER):
             return Expr.Variable(self.previous())
