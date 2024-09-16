@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pylox.Expr import Expr
+from pylox.Expr import Expr, Variable
 from pylox.tokens import Token
 import typing
 class Stmnt(typing.Protocol):
@@ -30,9 +30,10 @@ class Block(Stmnt):
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_BlockStmnt(self)
 class Class(Stmnt):
-   def __init__(self, name: Token, methods: list[Function]):
+   def __init__(self, name: Token, methods: list[Function], superclass: Variable | None):
       self.name = name
       self.methods = methods
+      self.superclass = superclass
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_ClassStmnt(self)
 class Expression(Stmnt):

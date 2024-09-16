@@ -95,6 +95,7 @@ def generate_ast():
             "Literal @ value: object",
             "Logical @ left: Expr, operator: Token, right: Expr",
             "Set @ obj: Expr, name: Token, value: Expr",
+            "Super @ keyword: Token, method: Token",
             "This @ keyword: Token",
             "Unary @ operator: Token, right: Expr",
             "Variable @ name: Token",
@@ -106,7 +107,7 @@ def generate_ast():
         base_name="Stmnt",
         types=[
             "Block @ statements: list[Stmnt]",
-            "Class @ name: Token, methods: list[Function]",
+            "Class @ name: Token, methods: list[Function], superclass: Variable | None",
             "Expression @ expression: Expr",
             "Function @ name: Token, params: list[Token], body: list[Stmnt]",
             "If @ condition: Expr, then_branch: Stmnt, else_branch: Stmnt | None",
@@ -115,5 +116,5 @@ def generate_ast():
             "Var @ name: Token, initializer: Expr",
             "While @ condition: Expr, body: Stmnt",
         ],
-        additional_imports=["from pylox.Expr import Expr\n"],
+        additional_imports=["from pylox.Expr import Expr, Variable\n"],
     )
