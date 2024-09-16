@@ -21,6 +21,8 @@ class Visitor[T]:
 
    def visit_SetExpr(self, expr:Set) -> T:...
 
+   def visit_SuperExpr(self, expr:Super) -> T:...
+
    def visit_ThisExpr(self, expr:This) -> T:...
 
    def visit_UnaryExpr(self, expr:Unary) -> T:...
@@ -77,6 +79,12 @@ class Set(Expr):
       self.value = value
    def accept[T](self, visitor: Visitor[T]):
       return visitor.visit_SetExpr(self)
+class Super(Expr):
+   def __init__(self, keyword: Token, method: Token):
+      self.keyword = keyword
+      self.method = method
+   def accept[T](self, visitor: Visitor[T]):
+      return visitor.visit_SuperExpr(self)
 class This(Expr):
    def __init__(self, keyword: Token):
       self.keyword = keyword

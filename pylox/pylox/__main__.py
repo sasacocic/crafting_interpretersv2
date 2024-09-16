@@ -102,10 +102,14 @@ class LoxCallable(typing.Protocol):
 class LoxClass(LoxCallable):
     name: str
     methods: dict[str, LoxFunction]
+    superclass: LoxClass
 
-    def __init__(self, name, methods: dict[str, LoxFunction]) -> None:
+    def __init__(
+        self, name, methods: dict[str, LoxFunction], superclass: LoxClass
+    ) -> None:
         self.name = name
         self.methods = methods
+        self.superclass = superclass
 
     def __repr__(self) -> str:
         return self.name
@@ -113,6 +117,9 @@ class LoxClass(LoxCallable):
     def find_method(self, name: str):
         if name in self.methods:
             return self.methods.get(name, None)
+
+        if self.superclass is not None:
+            return self.superclass.find_method(name)
 
     def call(self, interpreter: Interpreter, arguments: list[object]) -> None | object:
         initializer = self.find_method("init")
@@ -209,6 +216,7 @@ class FunctionType(enum.Enum):
 class ClassType(enum.Enum):
     NONE = 1
     CLASS = 2
+    SUBCLASS = 3
 
 
 class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
@@ -231,6 +239,17 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
             return None
         self.resolve_local(expr, expr.keyword)
 
+    def visit_SuperExpr(self, expr: Expr.Super) -> None:
+        if self.current_class == ClassType.NONE:
+            errors.error_from_token(
+                expr.keyword, "Can't use 'super' outside of a class"
+            )
+        elif self.current_class is not ClassType.SUBCLASS:
+            errors.error_from_token(
+                expr.keyword, "Can't use 'super' in a class with no superclass"
+            )
+        self.resolve_local(expr, expr.keyword)
+
     def visit_SetExpr(self, expr: Expr.Set) -> None:
         self.resolve_expr(expr.value)
         self.resolve_expr(expr.obj)
@@ -242,6 +261,23 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
         enclosing_class = self.current_class
         self.current_class = ClassType.CLASS
         self.declare(stmnt.name)
+        self.define(stmnt.name)
+
+        if (
+            stmnt.superclass is not None
+            and stmnt.name.lexeme == stmnt.superclass.name.lexeme
+        ):
+            errors.error_from_token(
+                stmnt.superclass.name, "A class can't inherit from itself."
+            )
+
+        if stmnt.superclass is not None:
+            self.current_class = ClassType.SUBCLASS
+            self.resolve_expr(stmnt.superclass)
+
+        if stmnt.superclass is not None:
+            self.begin_scope()
+            self.scopes[-1]["super"] = True
 
         self.begin_scope()
         self.scopes[-1]["this"] = True
@@ -251,9 +287,10 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
             if method.name.lexeme == "init":
                 declaration = FunctionType.INITIALIZER
             self.resolve_function(method, declaration)
-        self.define(stmnt.name)
 
         self.end_scope()
+        if stmnt.superclass is not None:
+            self.end_scope()
         self.current_class = enclosing_class
         return None
 
@@ -342,9 +379,6 @@ class Resolver(Expr.Visitor[None], stmnt.Visitor[None]):
     def resolve_local(self, expr: Expr.Expr, name: tokens.Token):
         for i in range(len(self.scopes) - 1, -1, -1):
             if name.lexeme in self.scopes[i]:
-                num_scopes = len(self.scopes)
-                cur_scope = i
-                num_scopes - 1 - cur_scope
                 self.interpreter.resolve(expr, len(self.scopes) - 1 - i)
                 return
 
@@ -423,7 +457,20 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
     # Statements
 
     def visit_ClassStmnt(self, stmnt: stmnt.Class) -> None:
+        superclass = None
+        if stmnt.superclass is not None:
+            superclass = self.evaluate(stmnt.superclass)
+            if not isinstance(superclass, LoxClass):
+                raise errors.LoxRuntimeError(
+                    stmnt.superclass.name, "Superclass must be a class"
+                )
+
         self.environment.define(stmnt.name.lexeme, None)
+
+        if stmnt.superclass is not None:
+            self.environment = Environment(self.environment)
+            self.environment.define("super", superclass)
+
         methods = {}
 
         for method in stmnt.methods:
@@ -432,7 +479,11 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
             )
             methods[method.name.lexeme] = function
 
-        klass = LoxClass(stmnt.name.lexeme, methods)
+        klass = LoxClass(stmnt.name.lexeme, methods, typing.cast(LoxClass, superclass))
+
+        if superclass is not None:
+            self.environment = self.environment.enclosing
+
         self.environment.assign(stmnt.name, klass)
 
     def visit_ReturnStmnt(self, stmnt: stmnt.Return) -> None:
@@ -487,6 +538,21 @@ class Interpreter(Expr.Visitor[object], stmnt.Visitor[None]):
         return None
 
     # Expressions
+
+    def visit_SuperExpr(self, expr: Expr.Super) -> object:
+        distance = self.lox_locals.get(expr)
+        superclass = typing.cast(LoxClass, self.environment.get_at(distance, "super"))
+
+        obj = typing.cast(LoxInstance, self.environment.get_at(distance - 1, "this"))
+
+        method = superclass.find_method(expr.method.lexeme)
+
+        if method is None:
+            raise errors.LoxRuntimeError(
+                expr.method, f"Undefined property {expr.method.lexeme}."
+            )
+
+        return method.bind(obj)
 
     def visit_ThisExpr(self, expr: Expr.This) -> object:
         return self.lookup_variable(expr.keyword, expr)
