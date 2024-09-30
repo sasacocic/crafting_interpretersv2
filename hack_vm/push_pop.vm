@@ -1,0 +1,6 @@
+push constant 99
+push constant 1
+push constant 3
+push constant 4
+pop local 1
+push constant 600
