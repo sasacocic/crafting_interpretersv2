@@ -7,8 +7,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-py_jilox = { path = "py_jilox", develop = true }
+pylox = { path = "pylox", develop = true }
 py_jack = { path = "py_jack", develop = true }
+hack_vm = { path = "hack_vm", develop = true }
 # TODO: add Ruff
 click = "^8.1.7"
 pytest = "^8.3.2"
