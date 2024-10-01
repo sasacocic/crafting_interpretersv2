@@ -4,8 +4,13 @@ implements vm commands
 push segment i
 pop segment i
 
-todo: learn this, that, pointer, temp
-do: sub
+TODO:
+    - neg
+    - gt
+    - lt
+    - and
+    - or
+    - not
 """
 
 
