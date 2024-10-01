@@ -1,0 +1,7 @@
+push constant 1
+push constant 1
+eq
+push constant 9
+push constant 8
+eq
+push constant 333

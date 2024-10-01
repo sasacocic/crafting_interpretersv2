@@ -36,7 +36,9 @@ def translate(vm_code: str):
         raise FileNotFoundError(f"{src_file} - does not exist")
 
     with src_file.open() as f:
-        run(f)
+        file_name = src_file.name[: len(src_file.name) - 3]
+        print(f"file name: {file_name}")
+        run(f, file_name)
 
 
 def line_reader(vm_commands: typing.TextIO):
@@ -46,35 +48,62 @@ def line_reader(vm_commands: typing.TextIO):
         yield line
 
 
-segments = {"constant": 0, "local": 1, "argument": 2, "this": 3, "that": 4, "temp": 5}
+segments = {
+    "constant": 0,
+    "local": 1,
+    "argument": 2,
+    "this": 3,
+    "that": 4,
+    "temp": 5,
+    "pointer": 6,
+    "static": 7,
+}
 
 
-def run(vm_commands: typing.TextIO):
+def run(vm_commands: typing.TextIO, file_name: str):
     g = line_reader(vm_commands)
     output = ""
     for line in g:
         split = line.split(" ")
+        match_line = split[0].strip()
+        if match_line.startswith("//") or match_line == "":
+            continue
         # I thought regex would help, but having a hard time extracting
         # the tokens I want
         # print(f"line: {line}")
         # split = re.findall(r"^push \w+ \d+|^pop \w+ \d+|add", line)
         # print(f"split: {split}")
-        match split[0].strip():
+        match match_line:
             case "push":
                 segment, index = split[1], split[2]
-                output += hack_vm.ops.push_val(segments[segment], int(index))
+                output += hack_vm.ops.push_val(segments[segment], int(index), file_name)
             case "pop":
                 segment, index = split[1], split[2]
-                output += hack_vm.ops.pop_val(segments[segment], int(index))
+                output += hack_vm.ops.pop_val(segments[segment], int(index), file_name)
             case "add":
                 # pop off the top two things of the stack and then push
                 # them onto the stack
                 output += hack_vm.ops.add()
             case "sub":
                 output += hack_vm.ops.sub()
+            case "eq":
+                output += hack_vm.ops.eq()
+            case "lt":
+                raise NotImplementedError()
+            case "gt":
+                raise NotImplementedError()
+            case "neg":
+                raise NotImplementedError()
+            case "and":
+                raise NotImplementedError()
+            case "or":
+                raise NotImplementedError()
+            case "not":
+                raise NotImplementedError()
             case _:
-                print(split[0].strip())
-                raise Exception("Unknown command. This should never happen")
+                raise Exception(
+                    f"Unknown command: '{split[0].strip()}'. This should never happen"
+                )
 
     with open("output.asm", mode="w") as f:
         f.write(output)

@@ -6,7 +6,6 @@ pop segment i
 
 todo: learn this, that, pointer, temp
 do: sub
-
 """
 
 
@@ -65,12 +64,21 @@ def top_stack_value():
     """
 
 
-def push_val(segment: int, val: int):
+def push_val(segment: int, val: int, file_name: str):
     """
     push segment i - push the value at segment[i] onto the stack
     """
 
     match segment:
+        case 7:  # static - note: static not really mapped to 7
+            ident = f"{file_name}.{val}"
+            return f"""
+            @{ident}
+            D=M
+            @0
+            A=M
+            M=D
+            """ + increment_segment(0)
         case 0:  # constant
             return f"""
             @{val}
@@ -79,7 +87,7 @@ def push_val(segment: int, val: int):
             A=M
             M=D
             """ + increment_segment(0)
-        case 5:
+        case 5:  # temp
             return f"""
             @5
             D=A
@@ -102,16 +110,39 @@ def push_val(segment: int, val: int):
             M=D
             """
             ) + increment_segment(0)  # move the stack pointer up after a push onto it
+        case 6:  # pointer segment
+            # THIS -> RAM[3]
+            # THAT -> RAM[4]
+            # pointer 0 access THIS / pointer 1 access THAT
+            return f"""
+            @{3 if val == 0 else 4}
+            D=M // base address of THIS
+            @0
+            A=M
+            M=D
+            """ + increment_segment(0)
         case _:  # static segment
             pass
             raise Exception("this should never happen")
 
 
-def pop_val(segment: int, index: int):
+def pop_val(segment: int, index: int, file_name: str):
     """
     pop segment i - pops the top element off of the stack and pushes it onto the segment
     """
     match segment:
+        case 7:  # static - note: static isn't really 7
+            ident = f"{file_name}.{index}"
+            return (
+                decrement_segment(0)
+                + top_stack_value()
+                + f"""
+            @top_value
+            D=M
+            @{ident}
+            M=D
+            """
+            )
         case 5:
             return (
                 decrement_segment(0)
@@ -142,6 +173,18 @@ def pop_val(segment: int, index: int):
                 @address
                 A=M
                 M=D
+            """
+            )
+        case 6:
+            #
+            return (
+                decrement_segment(0)
+                + top_stack_value()
+                + f"""
+            @top_value
+            D=M            
+            @{3 if index == 0 else 4}
+            M=D
             """
             )
         case 0:
@@ -210,6 +253,45 @@ def sub():
     @0
     A=M
     M=D
+    """
+        + increment_segment(0)
+    )
+
+
+i = 0
+
+
+def eq() -> str:
+    global i
+    i += 1
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        @before_top_value
+        M=D
+        """
+        + decrement_segment(0)
+        + top_stack_value()
+        + f"""
+        @before_top_value
+        D=M
+        @top_value
+        D=D-M
+        @EQUAL{i}
+        D;JEQ
+        @0
+        A=M
+        M=0 // not equal return 0
+        @END{i}
+        0;JMP
+        (EQUAL{i})
+            @0
+            A=M
+            M=-1 // equal return -1 as -1 = 111111111... in binary
+        (END{i})
     """
         + increment_segment(0)
     )
