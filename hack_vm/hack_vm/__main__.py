@@ -15,16 +15,16 @@ arithmetic and logical commands
 - and
 - or
 - not
-
 """
 
 import typing
 import click
 import pathlib
+import hack_vm
 
 
 @click.group()
-def hack_vm():
+def hack_vm_cli():
     pass
 
 
@@ -36,7 +36,9 @@ def translate(vm_code: str):
         raise FileNotFoundError(f"{src_file} - does not exist")
 
     with src_file.open() as f:
-        run(f)
+        file_name = src_file.name[: len(src_file.name) - 3]
+        print(f"file name: {file_name}")
+        run(f, file_name)
 
 
 def line_reader(vm_commands: typing.TextIO):
@@ -46,78 +48,68 @@ def line_reader(vm_commands: typing.TextIO):
         yield line
 
 
-def push_val(val: int):
-    return f"""
-    @{val} // value 
-    D=A
-    @0
-    A=M
-    M=D
-    """ + increment_segment(0)
+segments = {
+    "constant": 0,
+    "local": 1,
+    "argument": 2,
+    "this": 3,
+    "that": 4,
+    "temp": 5,
+    "pointer": 6,
+    "static": 7,
+}
 
 
-def increment_segment(segment: int):
-    return f"""
-    @{segment}
-    M=M+1
-    """
-
-
-segments = {"constant": 0, "local": 1}
-
-
-def decrement_segment(segment: int):
-    return f"""
-    @{segment}
-    M=M-1    
-    """
-
-
-def pop_val(segment: int, index: int):
-    # can only pop off the stack
-    # return f"""
-    # @0
-    # D=M-1
-    # A=D
-    # D=M
-    # @{segment}
-    # A=M
-    # M=D
-    # """ + decrement_segment(0)  # decrement stack
-
-    return f"""
-    @{segment}
-    D=M
-    @{index}
-    D=D+A
-    @5
-    M=D
-    @0
-    D=M-1
-    A=D
-    D=M
-    @5
-    A=M
-    M=D
-    """ + decrement_segment(0)  # decrement stack
-
-
-def run(vm_commands: typing.TextIO):
+def run(vm_commands: typing.TextIO, file_name: str):
     g = line_reader(vm_commands)
     output = ""
     for line in g:
-        command, segment, index = line.split(" ")  # (\w)+ (\w)+ (\d)+
-        match command:
+        split = line.split(" ")
+        match_line = split[0].strip()
+        if match_line.startswith("//") or match_line == "":
+            continue
+        # I thought regex would help, but having a hard time extracting
+        # the tokens I want
+        # print(f"line: {line}")
+        # split = re.findall(r"^push \w+ \d+|^pop \w+ \d+|add", line)
+        # print(f"split: {split}")
+        match match_line:
             case "push":
-                output += push_val(int(index))
+                segment, index = split[1], split[2]
+                output += hack_vm.ops.push_val(segments[segment], int(index), file_name)
             case "pop":
-                output += pop_val(segments[segment], int(index))
+                segment, index = split[1], split[2]
+                output += hack_vm.ops.pop_val(segments[segment], int(index), file_name)
+            case "add":
+                # pop off the top two things of the stack and then push
+                # them onto the stack
+                output += hack_vm.ops.add()
+            case "sub":
+                output += hack_vm.ops.sub()
+            case "eq":
+                output += hack_vm.ops.eq()
+            case "lt":
+                raise NotImplementedError()
+            case "gt":
+                raise NotImplementedError()
+            case "neg":
+                raise NotImplementedError()
+            case "and":
+                raise NotImplementedError()
+            case "or":
+                raise NotImplementedError()
+            case "not":
+                raise NotImplementedError()
+            case _:
+                raise Exception(
+                    f"Unknown command: '{split[0].strip()}'. This should never happen"
+                )
 
     with open("output.asm", mode="w") as f:
         f.write(output)
 
 
-hack_vm.add_command(translate)
+hack_vm_cli.add_command(translate)
 
 if __name__ == "__main__":
     """
@@ -128,4 +120,4 @@ if __name__ == "__main__":
     RAM[4] - THAT
     RAM[5:13] - TEMP 
     """
-    hack_vm()
+    hack_vm_cli()

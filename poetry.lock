@@ -26,6 +26,22 @@ files = [
 ]
 
 [[package]]
+name = "hack-vm"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "^3.12"
+files = []
+develop = true
+
+[package.dependencies]
+click = "^8.1.7"
+
+[package.source]
+type = "directory"
+url = "hack_vm"
+
+[[package]]
 name = "iniconfig"
 version = "2.0.0"
 description = "brain-dead simple config-ini parsing"
@@ -71,12 +87,16 @@ python-versions = "^3.12"
 files = []
 develop = true
 
+[package.dependencies]
+click = "^8.1.7"
+pytest = "^8.3.2"
+
 [package.source]
 type = "directory"
 url = "py_jack"
 
 [[package]]
-name = "py-jilox"
+name = "pylox"
 version = "0.1.0"
 description = ""
 optional = false
@@ -84,19 +104,22 @@ python-versions = "^3.12"
 files = []
 develop = true
 
+[package.dependencies]
+click = "^8.1.7"
+
 [package.source]
 type = "directory"
-url = "py_jilox"
+url = "pylox"
 
 [[package]]
 name = "pytest"
-version = "8.3.2"
+version = "8.3.3"
 description = "pytest: simple powerful testing with Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pytest-8.3.2-py3-none-any.whl", hash = "sha256:4ba08f9ae7dcf84ded419494d229b48d0903ea6407b030eaec46df5e6a73bba5"},
-    {file = "pytest-8.3.2.tar.gz", hash = "sha256:c132345d12ce551242c87269de812483f5bcc87cdbb4722e48487ba194f9fdce"},
+    {file = "pytest-8.3.3-py3-none-any.whl", hash = "sha256:a6853c7375b2663155079443d2e45de913a911a11d669df02a50814944db57b2"},
+    {file = "pytest-8.3.3.tar.gz", hash = "sha256:70b98107bd648308a7952b06e6ca9a50bc660be218d53c257cc1fc94fda10181"},
 ]
 
 [package.dependencies]
@@ -111,4 +134,4 @@ dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "pygments
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "fcf9a3640bd886b6de193bb0af775e5c8136b78d3012e709a7b0ae17c20bcc68"
+content-hash = "311a377e567c91abb3f1ce415a8399b5589bdf1371bf73532f718c64f8c3cba5"
