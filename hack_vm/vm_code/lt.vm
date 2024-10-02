@@ -1,0 +1,15 @@
+push constant 10
+push constant 5
+lt
+push constant 892
+push constant 891
+lt
+// 892 < 891 -> false -> 0
+push constant 891
+push constant 892
+lt
+// true -> -1
+push constant 891
+push constant 891
+lt
+// false -> 0

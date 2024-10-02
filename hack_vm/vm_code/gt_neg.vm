@@ -1,0 +1,10 @@
+
+push constant 99
+neg
+// - 99 should be top of stack
+push constant 101
+push constant 200
+gt
+// 101 -> x
+// 200 -> y
+// if x > y (200 > 101) -> -1 (true)
