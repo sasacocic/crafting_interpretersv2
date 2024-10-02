@@ -89,17 +89,17 @@ def run(vm_commands: typing.TextIO, file_name: str):
             case "eq":
                 output += hack_vm.ops.eq()
             case "lt":
-                raise NotImplementedError()
+                output += hack_vm.ops.lt()
             case "gt":
-                raise NotImplementedError()
+                output += hack_vm.ops.gt()
             case "neg":
-                raise NotImplementedError()
+                output += hack_vm.ops.neg()
             case "and":
-                raise NotImplementedError()
+                output += hack_vm.ops.and_()
             case "or":
-                raise NotImplementedError()
+                output += hack_vm.ops.or_()
             case "not":
-                raise NotImplementedError()
+                output += hack_vm.ops.not_()
             case _:
                 raise Exception(
                     f"Unknown command: '{split[0].strip()}'. This should never happen"

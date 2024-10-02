@@ -300,3 +300,176 @@ def eq() -> str:
     """
         + increment_segment(0)
     )
+
+
+"""
+implements vm commands
+
+push segment i
+pop segment i
+
+TODO:
+    - neg ✅
+    - gt - done
+    - lt - done
+    - and - done
+    - or - done
+    - not
+"""
+
+
+def neg() -> str:
+    global i
+    i += 1
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        D=D-M // makes it 0
+        D=D-M // makes it negative
+        @0
+        A=M
+        M=D
+    """
+        + increment_segment(0)
+    )
+
+
+def gt() -> str:
+    global i
+    i += 1
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        @before_top_value
+        M=D
+        """
+        + decrement_segment(0)
+        + top_stack_value()
+        + f"""
+        @before_top_value
+        D=M
+        @top_value
+        D=M-D // x > y -> (X ->D) (Y -> M) if x > 0 implies x > y if x < 0 implies y > x
+        @GREATER{i}
+        D;JGT
+        @SP
+        A=M
+        M=0 // not equal return 0
+        @END{i}
+        0;JMP
+        (GREATER{i})
+            @SP
+            A=M
+            M=-1 // equal return -1 as -1 = 111111111... in binary
+        (END{i})
+    """
+        + increment_segment(0)
+    )
+
+
+def lt() -> str:
+    global i
+    i += 1
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        @before_top_value
+        M=D
+        """
+        + decrement_segment(0)
+        + top_stack_value()
+        + f"""
+        @before_top_value
+        D=M
+        @top_value
+        D=M-D // x > y -> (X ->D) (Y -> M) if x > 0 implies x > y if x < 0 implies y > x
+        @LESS{i}
+        D;JLT
+        @0
+        A=M
+        M=0 // not equal return 0
+        @END{i}
+        0;JMP
+        (LESS{i})
+            @0
+            A=M
+            M=-1 // equal return -1 as -1 = 111111111... in binary
+        (END{i})
+    """
+        + increment_segment(0)
+    )
+
+
+def and_() -> str:
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        @before_top_value
+        M=D
+        """
+        + decrement_segment(0)
+        + top_stack_value()
+        + """
+        @before_top_value
+        D=M
+        @top_value
+        D=D&M
+        @0
+        A=M
+        M=D
+    """
+        + increment_segment(0)
+    )
+
+
+def or_() -> str:
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        @before_top_value
+        M=D
+        """
+        + decrement_segment(0)
+        + top_stack_value()
+        + """
+        @before_top_value
+        D=M
+        @top_value
+        D=D|M
+        @0
+        A=M
+        M=D
+    """
+        + increment_segment(0)
+    )
+
+
+def not_() -> str:
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + """
+        @top_value
+        D=M
+        D=!D
+        @0
+        A=M
+        M=D
+        """
+        + increment_segment(0)
+    )
