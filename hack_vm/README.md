@@ -1,14 +1,8 @@
-
-
-
-
-
-
-
-
-
-
 # HACK VM
+
+
+
+TODO: how does the hack vm work in general and what are it's components?
 
 
 
