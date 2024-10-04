@@ -499,24 +499,61 @@ def call(function_name: str, n_args: int) -> str:
 
 
     pesudo code implementation:
-
-    push returnAddress
-    push LCL
-    push ARG
-    push THIS
-    push THAT
-    ARG = SP - 5 - n_args
-    LCL = SP
-    goto function_name
+        push returnAddress
+        push LCL
+        push ARG
+        push THIS
+        push THAT
+        ARG = SP - 5 - n_args
+        LCL = SP
+        goto function_name
     """
 
-    return f"""
+    def push_segment(segment: str):
+        """
+        segments: one of LCL, ARG, THIS, THAT
+        """
+        return f"""
+        @{segment}
+        D=M
+        @SP
+        A=M
+        M=D
+        """ + increment_segment(0)
+
+    return (
+        f"""
     @{function_name}
     D=A
     @SP
     A=M
     M=D
     """
+        + increment_segment(0)
+        + push_segment("LCL")
+        + push_segment("ARG")
+        + push_segment("THIS")
+        + push_segment("THAT")
+        + f"""
+
+    @SP
+    D=M
+    @5
+    D=D-A
+    @{n_args}
+    D=D-A
+    @ARG
+    M=D // ARG = SP - 5 - n_args
+
+
+    @SP
+    D=M
+    @LCL
+    M=D // LCL = SP
+    @{function_name}
+    0;JMP
+    """
+    )
 
     # I couldn't use push value for the above code
     # push_val(
