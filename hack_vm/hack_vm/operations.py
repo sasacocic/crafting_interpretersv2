@@ -605,8 +605,25 @@ def return_():
     goto retAddr
     """
 
+    def set_segment(segment: str, minus_endframe: int):
+        return f"""
+        @endFrame
+        D=M
+        @{minus_endframe}
+        D=D-A
+        @R13
+        M=D
+        @R13
+        A=M
+        D=M
+        @{segment}
+        M=D
+        // segment: THIS, THAT, LCL, ARG = *(endFrame - minus_endframe)
+    """
+
     return (
         """
+    @639 // debugging
     @LCL
     D=M
     @endFrame
@@ -617,13 +634,16 @@ def return_():
     D=M
     @5
     D=D-A
-    @D
+    @R13
+    M=D
+    @R13
     A=M
     D=M
     @retAddress
     M=D
     // retAddress = *(endFrame - 5) - not totally sure about this need to review
     """
+        + decrement_segment(0)
         + top_stack_value()
         + """
     @top_value
@@ -639,7 +659,15 @@ def return_():
     D=D+1
     @SP
     M=D
-    // SP = ARG + 1
+    // SP = ARG + 1"""
+        + set_segment("THAT", minus_endframe=1)
+        + set_segment("THIS", minus_endframe=2)
+        + set_segment("ARG", minus_endframe=3)
+        + set_segment("LCL", minus_endframe=4)
+        + """
+    @retAddress
+    0;JMP
+    // goto retAddress
 
     """
     )

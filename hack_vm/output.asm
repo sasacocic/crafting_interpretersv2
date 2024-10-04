@@ -36,15 +36,6 @@
     
     (LOOPCOMPLETE1)
     
-            @99
-            D=A
-            @0
-            A=M
-            M=D
-            
-    @0
-    M=M+1
-    
     @1
     D=M // holds address of RAM[segment]
     @0
@@ -239,4 +230,103 @@
     @0
     M=M+1
     
+    @639 // debugging
+    @LCL
+    D=M
+    @endFrame
+    M=D
+    // endFrame = LCL
+
+    @endFrame
+    D=M
+    @5
+    D=D-A
+    @R13
+    M=D
+    @R13
+    A=M
+    D=M
+    @retAddress
+    M=D
+    // retAddress = *(endFrame - 5) - not totally sure about this need to review
+    
+    @0
+    M=M-1    
+    
+    @0
+    A=M
+    D=M
+    @top_value
+    M=D // top_value now contains top stack value
+    
+    @top_value
+    D=M
+    @ARG
+    A=M
+    M=D
+    // *ARG = POP()
+
+
+    @ARG
+    D=M
+    D=D+1
+    @SP
+    M=D
+    // SP = ARG + 1
+        @endFrame
+        D=M
+        @1
+        D=D-A
+        @R13
+        M=D
+        @R13
+        A=M
+        D=M
+        @THAT
+        M=D
+        // segment: THIS, THAT, LCL, ARG = *(endFrame - minus_endframe)
+    
+        @endFrame
+        D=M
+        @2
+        D=D-A
+        @R13
+        M=D
+        @R13
+        A=M
+        D=M
+        @THIS
+        M=D
+        // segment: THIS, THAT, LCL, ARG = *(endFrame - minus_endframe)
+    
+        @endFrame
+        D=M
+        @3
+        D=D-A
+        @R13
+        M=D
+        @R13
+        A=M
+        D=M
+        @ARG
+        M=D
+        // segment: THIS, THAT, LCL, ARG = *(endFrame - minus_endframe)
+    
+        @endFrame
+        D=M
+        @4
+        D=D-A
+        @R13
+        M=D
+        @R13
+        A=M
+        D=M
+        @LCL
+        M=D
+        // segment: THIS, THAT, LCL, ARG = *(endFrame - minus_endframe)
+    
+    @retAddress
+    0;JMP
+    // goto retAddress
+
     
