@@ -1,7 +1,5 @@
 # HACK VM
 
-
-
 TODO: how does the hack vm work in general and what are it's components?
 
 
@@ -11,7 +9,7 @@ what is my understanding of how do function calls work?
 
 - There are 3 commands 
     1. `call f k` - `k` determines the # of arguments a function takes - `function f n` - `n` determines the # of local variables
-    2. `call f k` is awalys preceed by `function f n` i.e. a `function` commands will never come before a `call` command
+    2. `call f k` is awalys comes after `function f n` i.e. a `function` commands will never come before a `call` command
     3. `return` used to put the stack machine back into the state that is needed to continue processing instructions from the function that called this function i.e. put caller back into state it was in before it called callee 
 
 
@@ -49,6 +47,17 @@ it should then be in a state to run all of its instructions
 
 
 
+# return
+
+
+how does return work - before it starts there will be a value on the top of the stack, and that is it's return value
+
+
+1. Take the top stack value and place it in ARG[0]
+2. restore the stack frame - i.e. set ARG, LCL, THIS, THAT pointers to the values you saved
+3. clear the stack of the current function
+4. Set the stack SP right after ARG[0] (this will be )
+5. Jump to the return address within caller's code
 
 
 

@@ -100,6 +100,11 @@ def run(vm_commands: typing.TextIO, file_name: str):
                 output += hack_vm.ops.or_()
             case "not":
                 output += hack_vm.ops.not_()
+            case "function":
+                function_name, n_args = split[1], split[2]
+                output += hack_vm.ops.function(function_name, int(n_args))
+            case "return":
+                output += hack_vm.ops.return_()
             case _:
                 raise Exception(
                     f"Unknown command: '{split[0].strip()}'. This should never happen"

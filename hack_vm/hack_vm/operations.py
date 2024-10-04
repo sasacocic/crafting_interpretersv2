@@ -1,3 +1,6 @@
+import enum
+
+
 """
 implements vm commands
 
@@ -5,13 +8,21 @@ push segment i
 pop segment i
 
 TODO:
-    - neg
-    - gt
-    - lt
-    - and
-    - or
-    - not
+    - call f n
+    - function f n 
+    - return
 """
+
+
+class Segments(enum.Enum):
+    CONSTANT = 0
+    LOCAL = 1
+    ARGUMENT = 2
+    THIS = 3
+    THAT = 4
+    TEMP = 5
+    POINTER = 6
+    STATIC = 7
 
 
 def increment_segment(segment: int):
@@ -472,4 +483,163 @@ def not_() -> str:
         M=D
         """
         + increment_segment(0)
+    )
+
+
+"""
+function and branching commands
+"""
+
+
+def call(function_name: str, n_args: int) -> str:
+    """
+    function_name: name of function to call
+    n_args: number of arguments the function takes
+
+
+
+    pesudo code implementation:
+
+    push returnAddress
+    push LCL
+    push ARG
+    push THIS
+    push THAT
+    ARG = SP - 5 - n_args
+    LCL = SP
+    goto function_name
+    """
+
+    return f"""
+    @{function_name}
+    D=A
+    @SP
+    A=M
+    M=D
+    """
+
+    # I couldn't use push value for the above code
+    # push_val(
+    #     Segments.CONSTANT,
+    # )
+
+
+def function(function_name: str, n_args: int) -> str:
+    """
+    n_args: number size of LCL segment
+    name: function name
+
+
+    effective to this pseudo code
+    (functionName)
+        repeat nVars times:
+            push 0
+    """
+
+    global i
+    i += 1
+
+    def set_variable(var_name: str, number: int):
+        return f"""
+        @{number}
+        D=A
+        @{var_name}
+        M=D
+        """
+
+    def dec_variable(var_name: str):
+        return f"""
+        @{var_name}
+        D=M
+        D=D-1
+        M=D
+        """
+
+    return (
+        f"""
+    ({function_name})"""
+        + set_variable("count", n_args)
+        + f"""
+    @LOOP{i}
+    0;JMP
+
+    """
+        + f"""
+    (LOOP{i})
+        @count
+        D=M
+        @STOP{i}
+        D;JEQ
+        // code I want to run in my loop
+        @SP
+        A=M
+        M=0    
+        """
+        + dec_variable("count")
+        + increment_segment(0)
+        + f"""
+        @LOOP{i}
+        0;JMP
+         """
+        + f""" 
+    (STOP{i})
+        @LOOPCOMPLETE{i}
+        0;JMP
+    """
+        + f"""
+    (LOOPCOMPLETE{i})
+    """
+    )
+
+
+def return_():
+    """
+    endFrame = LCL
+    retAddress = *(endFrame - 5)
+    *ARG = pop()
+    SP = ARG + 1
+    THAT = *(endFrame - 1)
+    THIS = *(endFrame - 2)
+    ARG = *(endFrame - 3)
+    LCL = *(endFrame - 4)
+    goto retAddr
+    """
+
+    return (
+        """
+    @LCL
+    D=M
+    @endFrame
+    M=D
+    // endFrame = LCL
+
+    @endFrame
+    D=M
+    @5
+    D=D-A
+    @D
+    A=M
+    D=M
+    @retAddress
+    M=D
+    // retAddress = *(endFrame - 5) - not totally sure about this need to review
+    """
+        + top_stack_value()
+        + """
+    @top_value
+    D=M
+    @ARG
+    A=M
+    M=D
+    // *ARG = POP()
+
+
+    @ARG
+    D=M
+    D=D+1
+    @SP
+    M=D
+    // SP = ARG + 1
+
+    """
     )
