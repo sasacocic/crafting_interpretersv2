@@ -491,8 +491,36 @@ function and branching commands
 """
 
 
+def if_goto(label: str):
+    return (
+        decrement_segment(0)
+        + top_stack_value()
+        + f"""
+    @top_value // top stack value
+    D=M
+    @{label}
+    D;JNE
+    """
+    )
+
+
+def goto(label: str):
+    return f"""
+    @{label}
+    0;JMP
+    """
+
+
+def label(label: str):
+    return f"""
+    ({label})
+    """
+
+
 def call(function_name: str, n_args: int) -> str:
     """
+    TODO: I never actually tested this implementation - only function call
+
     function_name: name of function to call
     n_args: number of arguments the function takes
 
@@ -507,6 +535,7 @@ def call(function_name: str, n_args: int) -> str:
         ARG = SP - 5 - n_args
         LCL = SP
         goto function_name
+    (returnAddress)
     """
 
     def push_segment(segment: str):
@@ -521,13 +550,17 @@ def call(function_name: str, n_args: int) -> str:
         M=D
         """ + increment_segment(0)
 
+    global i
+    i += 1
+
     return (
         f"""
-    @{function_name}
+    // begin call
+    @{function_name + "_return_address"}{i}
     D=A
     @SP
     A=M
-    M=D
+    M=D // push return-address
     """
         + increment_segment(0)
         + push_segment("LCL")
@@ -552,6 +585,9 @@ def call(function_name: str, n_args: int) -> str:
     M=D // LCL = SP
     @{function_name}
     0;JMP
+    // end call
+    @4321
+    ({function_name + "_return_address"}{i})
     """
     )
 
@@ -655,12 +691,12 @@ def return_():
         D=M
         @{segment}
         M=D
-        // segment: THIS, THAT, LCL, ARG = *(endFrame - minus_endframe)
+        // segment: {segment} = *(endFrame - minus_endframe)
     """
 
     return (
         """
-    @639 // debugging
+    @6969
     @LCL
     D=M
     @endFrame
@@ -678,7 +714,7 @@ def return_():
     D=M
     @retAddress
     M=D
-    // retAddress = *(endFrame - 5) - not totally sure about this need to review
+    // retAddress = *(endFrame - 5)
     """
         + decrement_segment(0)
         + top_stack_value()
@@ -689,7 +725,6 @@ def return_():
     A=M
     M=D
     // *ARG = POP()
-
 
     @ARG
     D=M
@@ -702,9 +737,11 @@ def return_():
         + set_segment("ARG", minus_endframe=3)
         + set_segment("LCL", minus_endframe=4)
         + """
+    @9999 // debugging
     @retAddress
+    D=M
+    A=D
     0;JMP
     // goto retAddress
-
     """
     )
