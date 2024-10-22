@@ -108,6 +108,8 @@ statements = set([
     TokenType.RETURN,
 ])
 
+booleans = set([TokenType.TRUE, TokenType.FALSE])
+
 unary_op = set([TokenType.MINUS, TokenType.TILDE])
 
 

@@ -44,6 +44,20 @@ class Parser:
         return top.token_type if top else None
 
     def parse(self):
+        """
+        TODO: need to change this. I'm basically using this as the entry point into to reset the symbol
+        tables. There's definitely a more buttoned up way to do this than this.
+        """
+        py_jack.ast_nodes.class_occurrences = {
+            "field": 0,
+            "static": 0,
+            "local": 0,
+            "argument": 0,
+            # there are more of these just not really sure about them
+        }
+        py_jack.ast_nodes.class_symbols = {}
+        py_jack.ast_nodes.current_class_name = None
+        py_jack.ast_nodes.current_subroutine_name = None
         return self.parse_class()
 
     def parse_class(self) -> py_jack.ast_nodes.ClassNode:
@@ -187,7 +201,13 @@ class Parser:
         while self._peek_token_type() == jack_scanner.TokenType.COMMA:
             var_names.append((self._next(), self._next()))
         semi_colon = self._next()
-        return py_jack.ast_nodes.VarDec(var_kw, _type, var_name, var_names, semi_colon)
+        return py_jack.ast_nodes.VarDec(
+            var_kw=var_kw,
+            _type=_type,
+            var_name=var_name,
+            var_names=var_names,
+            semi_colon=semi_colon,
+        )
 
     def subroutine_body(self):
         left_squerly = self._next()
@@ -232,8 +252,12 @@ class Parser:
         return constant
 
     def parse_statements(self) -> py_jack.ast_nodes.Statements:
+        LOGGER.info("parser:parse_statements")
         statements: list[py_jack.ast_nodes.StatementType] = []
+        LOGGER.info(self._peek_token_type())
+        LOGGER.info(self._peek().lexeme)
         while self._peek_token_type() in jack_scanner.statements:
+            LOGGER.info("parsing %s", self._peek_token_type().name)
             statements.append(self.statement())
         return py_jack.ast_nodes.Statements(statements=statements)
 
