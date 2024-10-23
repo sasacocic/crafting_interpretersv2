@@ -102,23 +102,20 @@ class Main {
     	var boolean loop;
     	
     	let loop = true;
-    	while (loop) {
-    	    let position = position + 1;
-    	    let mask = Main.nextMask(mask);
-    	
-    	    if (~(position > 16)) {
-    	
-    	        if (~((value & mask) = 0)) {
-    	            do Memory.poke(8000 + position, 1);
-       	        }
-    	        else {
-    	            do Memory.poke(8000 + position, 0);
-      	        }    
-    	    }
-    	    else {
-    	        let loop = false;
-    	    }
-    	}
+        let position = position + 1;
+        let mask = Main.nextMask(mask);
+        if (~(position > 16)) {
+    
+            if (~((value & mask) = 0)) {
+                do Memory.poke(8000 + position, 1);
+            }
+            else {
+                do Memory.poke(8000 + position, 0);
+            }    
+        }
+        else {
+            let loop = false;
+        }
     	return;
     }
 

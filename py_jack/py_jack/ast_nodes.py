@@ -10,7 +10,13 @@ import logging
 LOGGER: typing.Final = logging.getLogger(__name__)
 
 
+class AbstractExpression(typing.Protocol):
+    pass
+
 class CodeGenWriter[T: typing.IO]:
+    """
+    this is one way to implement code indentation
+    """
     _file: T
 
     def __init__(self, io: T):
@@ -184,16 +190,10 @@ class ClassNode(XmlWriter, ASTEval):
         current_class_name = self.class_name.lexeme
 
         for class_var_def in self.class_var_dec or []:
-            # I stopped here - I need to iterate over the tree again - I should
-            # be able to do this for really small portions
             class_var_def.eval_node(file)
 
         for subroutine_dec in self.subroutine_dec or []:
             subroutine_dec.eval_node(file)
-
-    # def write_eval(self, file: typing.IO):
-    #     self.eval_node()
-    #     return super().write_eval(file, indent)
 
 
 @dataclasses.dataclass
@@ -349,8 +349,6 @@ class ParameterList(XmlWriter, ASTEval):
         return len(self.variables)
 
     def write_xml(self, file: typing.IO, indent: int = 0):
-        self.eval_node()
-        self.write_eval(file)
         with self.write_node(file, indent) as t:
             if self._type is None or self.varname is None:
                 # self.write_node(file, indent, is_opening_tag=False)
@@ -517,7 +515,7 @@ class SubroutineBody(XmlWriter, ASTEval):
 
 
 @dataclasses.dataclass
-class Expression(XmlWriter, ASTEval):
+class Expression(AbstractExpression ,XmlWriter, ASTEval):
     term: Term
     op_terms: list[tuple[jack_scanner.Token, Term]]
 
@@ -562,12 +560,9 @@ class Expression(XmlWriter, ASTEval):
                         f"operator: '{operator.lexeme}' is not a valid operator"
                     )
 
-    # def write_eval(self, file: typing.IO):
-    #     return super().write_eval(file)
-
 
 @dataclasses.dataclass
-class Term(XmlWriter, ASTEval):
+class Term(AbstractExpression, XmlWriter, ASTEval):
     term: (
         jack_scanner.Token
         | tuple[jack_scanner.Token, Term]
@@ -687,7 +682,7 @@ class ExpressionList(XmlWriter, ASTEval):
 
 
 @dataclasses.dataclass
-class SubroutineCall(XmlWriter, ASTEval):
+class SubroutineCall(AbstractExpression, XmlWriter, ASTEval):
     subroutine_name: jack_scanner.Token
     left_paren: jack_scanner.Token
     right_paren: jack_scanner.Token
