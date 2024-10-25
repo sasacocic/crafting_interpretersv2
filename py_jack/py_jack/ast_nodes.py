@@ -1,10 +1,12 @@
 from __future__ import annotations
+from os import write
 import py_jack.jack_scanner as jack_scanner
 import pathlib
 import typing
 import dataclasses
 import contextlib
 import logging
+import enum
 
 
 LOGGER: typing.Final = logging.getLogger(__name__)
@@ -43,8 +45,14 @@ class_occurrences: dict[str, int] = {
     # there are more of these just not really sure about them
 }
 
+@dataclasses.dataclass
+class CurrentSubroutine:
+    variant: str
+    name: str
+    type_: str
+
 class_symbols: dict[str, VariableInfo] = {}
-current_subroutine_name: str | None = None
+current_subroutine_name: CurrentSubroutine | None = None
 subroutine_occurrences: dict[str, int] = {
     "field": 0,
     "static": 0,
@@ -153,7 +161,7 @@ class ClassNode(XmlWriter, ASTEval):
 
     def __repr__(self):
         return f"{self.__class__.__name__}( class {self.class_name.lexeme} {{ }} len: {len(self.class_var_dec or [])})"
-
+    
     # why pass a file? Why not return a string or write to stdout? Could also be useful.
     # def write_xml(self, file: typing.IO, indent: int = 0):
     def write_xml(self, file: pathlib.Path, indent: int = 0):
@@ -178,8 +186,29 @@ class ClassNode(XmlWriter, ASTEval):
             xml_file.write(f"</{self.class_kw.lexeme}>\n")
 
     def compile(self, file: pathlib.Path):
+        """
+        TODO: need to change this. I'm basically using this as the entry point into to reset the symbol
+        tables. There's definitely a more buttoned up way to do this than this.
+        """
         # assumes file is valid at least and will create it
         LOGGER.info(f"writing to: {file.resolve()}")
+
+        global class_occurrences
+        global class_symbols
+        global current_class_name
+        global current_subroutine_name
+
+        class_occurrences = {
+            "field": 0,
+            "static": 0,
+            "local": 0,
+            "argument": 0,
+            # there are more of these just not really sure about them
+        }
+        class_symbols = {}
+        current_class_name = None
+        current_subroutine_name = None
+
         mode = "w"
         with file.open(mode) as vm_code_file:
             self.eval_node(file=vm_code_file)
@@ -188,6 +217,7 @@ class ClassNode(XmlWriter, ASTEval):
         LOGGER.debug("eval:ClassNode")
         global current_class_name
         current_class_name = self.class_name.lexeme
+        LOGGER.debug(f"current_class_name set to: {current_class_name}")
 
         for class_var_def in self.class_var_dec or []:
             class_var_def.eval_node(file)
@@ -196,6 +226,12 @@ class ClassNode(XmlWriter, ASTEval):
             subroutine_dec.eval_node(file)
 
 
+
+class ClassVariable(typing.NamedTuple):
+
+    type_: str
+    var_names: list[str]
+
 @dataclasses.dataclass
 class ClassVarDec(XmlWriter, ASTEval):
     field_type: jack_scanner.Token
@@ -203,6 +239,20 @@ class ClassVarDec(XmlWriter, ASTEval):
     var_name: jack_scanner.Token
     semi_colon: jack_scanner.Token
     var_names: list[tuple[jack_scanner.Token, jack_scanner.Token]] | None = None
+
+
+    @property
+    def class_vars(self) -> ClassVariable:
+        var_names = []
+        var_names.append(self.var_name.lexeme)
+
+        for _comma, identifier in self.var_names:
+            var_names.append(identifier.lexeme)
+
+        return ClassVariable(
+                    type_=self.type_.lexeme,
+                    var_names=var_names
+                    )
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent=indent):
@@ -221,21 +271,21 @@ class ClassVarDec(XmlWriter, ASTEval):
         # file.write(f"{' ' * indent}</classVarDec>\n")
 
     def eval_node(self, file: typing.IO):
-        vnames = [t for t in [self.var_name] + [e[1] for e in self.var_names or []]]
+        type_, vnames = self.class_vars
         for var_name in vnames:
             field_type_count = class_occurrences[self.field_type.lexeme]
             LOGGER.debug(
-                "class_symbol: %s -> [%s, %s, %s]"
+                "add class-level symbol: %s -> [%s, %s, %s]"
                 % (
-                    var_name.lexeme,
-                    self.type_.lexeme,
+                    var_name,
+                    type_,
                     self.field_type.lexeme,
                     field_type_count,
                 )
             )
             # type, kind, occurrence
-            class_symbols[var_name.lexeme] = VariableInfo(
-                type_=self.type_.lexeme,
+            class_symbols[var_name] = VariableInfo(
+                type_=type_,
                 kind=self.field_type.lexeme,
                 occurrence=field_type_count,
             )
@@ -286,29 +336,72 @@ class SubroutineDec(XmlWriter, ASTEval):
         with code_gen_indent():
             LOGGER.debug("eval:SubroutineDec")
             global current_subroutine_name
-            current_subroutine_name = self.name.lexeme
+            current_subroutine_name = CurrentSubroutine(name= self.name.lexeme, variant=self.subroutine_variant.lexeme, type_=self.return_type.lexeme)
 
             global subroutine_symbols
             subroutine_symbols = {}
             reset_subroutine_occurrences()
-            LOGGER.info(f"compiling subroutine: {current_subroutine_name}")
+            LOGGER.info(f"compiling subroutine: {current_subroutine_name.name}")
             self.write_eval(file)
 
     def write_eval(self, file: typing.IO):
         LOGGER.debug("write:SubroutineDec")
         global current_class_name
         global current_subroutine_name
+        global current_class_name
+        indent = get_code_gen_indent()
+        match self.subroutine_variant.token_type:
+            case jack_scanner.TokenType.CONSTRUCTOR:
+                if current_class_name is None:
+                    raise Exception("current_class_name is not defined")
+                subroutine_symbols["this"] = VariableInfo(
+                    type_=current_class_name, kind="argument", occurrence=0
+                )
+                self.parameter_list.eval_node(file)
 
-        self.parameter_list.eval_node(file)
+                local_argument_count = (
+                    self.subroutine_body.variable_declaration_count
+                )
 
-        local_argument_count = (
-            self.subroutine_body.variable_declaration_count
-        )  # arguments to a function are not considered local variables
+                file.write(
+                    f"function {current_class_name}.{current_subroutine_name.name} {local_argument_count}\n"
+                )
 
-        file.write(
-            f"function {current_class_name}.{current_subroutine_name} {local_argument_count}\n"
-        )
-        self.subroutine_body.eval_node(file)
+                file.write(f"{indent * ' '}push constant {len(class_symbols)}\n") # class_symbols should be equal to how much space we need for this object
+                file.write(f"{indent * ' '}call Memory.alloc 1\n")
+                file.write(f"{indent * ' '}pop pointer 0\n")
+                self.subroutine_body.eval_node(file)
+
+            case jack_scanner.TokenType.METHOD:
+                if current_class_name is None:
+                    raise Exception("current_class_name is not defined")
+                subroutine_symbols["this"] = VariableInfo(
+                    type_=current_class_name, kind="argument", occurrence=0
+                )
+                self.parameter_list.eval_node(file)
+                local_argument_count = (
+                    self.subroutine_body.variable_declaration_count
+                )  # arguments to a function are not considered local variables
+                file.write(
+                    f"function {current_class_name}.{current_subroutine_name.name} {local_argument_count}\n"
+                )
+                file.write(f"{indent * " "}push argument 0\n")
+                file.write(f"{indent * " "}pop pointer 0\n") # set the this pointer of the method
+                self.subroutine_body.eval_node(file)
+            case jack_scanner.TokenType.FUNCTION:
+                self.parameter_list.eval_node(file)
+
+                local_argument_count = (
+                    self.subroutine_body.variable_declaration_count
+                )  # arguments to a function are not considered local variables
+
+                file.write(
+                    f"function {current_class_name}.{current_subroutine_name.name} {local_argument_count}\n"
+                )
+                self.subroutine_body.eval_node(file)
+            case _:
+                raise Exception(f"subroutine type {self.subroutine_variant.lexeme} is not one of: constructor, function, or method.")
+
 
 
 class ParameterVar(typing.NamedTuple):
@@ -366,11 +459,8 @@ class ParameterList(XmlWriter, ASTEval):
         LOGGER.debug("eval:ParameterList")
         if current_class_name is None:
             raise Exception(
-                f"can't set 'this' of {current_subroutine_name}, because current class name is None"
+                f"can't set 'this' of {current_subroutine_name.name}, because current class name is None"
             )
-        subroutine_symbols["this"] = VariableInfo(
-            type_=current_class_name, kind="argument", occurrence=0
-        )
         for type_, varname in self.variables:
             # if no varname then error
             field_type_count = subroutine_occurrences["argument"]
@@ -491,7 +581,7 @@ class SubroutineBody(XmlWriter, ASTEval):
     def variable_declaration_count(self):
         return sum([len(var_dec.symbol_names) for var_dec in self.var_decs])
 
-    def write_xml(self, file: typing.IO, indent: int):
+    def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
             indent += 2
             self.write_token(self.left_squerly, file, indent)
@@ -501,17 +591,12 @@ class SubroutineBody(XmlWriter, ASTEval):
             self.write_token(self.right_squerly, file, indent)
 
     def eval_node(self, file: typing.IO):
-        LOGGER.debug("eval:SubroutineBody")
-
+        LOGGER.debug(f"eval:SubroutineBody")
         for var_dec in self.var_decs:
             var_dec.eval_node(file)
-
-        # there seems to be a bug with my parser, because the jack program
-        # isn't working
-        LOGGER.debug(f"eval:Statment?? {len(self.statements.statements)}")
         for statement in self.statements.statements:
-            LOGGER.debug("eval:Statment??")
             statement.eval_node(file)
+
 
 
 @dataclasses.dataclass
@@ -606,17 +691,35 @@ class Term(AbstractExpression, XmlWriter, ASTEval):
                     case jack_scanner.TokenType.INTEGER_CONSTANT:
                         vm_code_stream = f"push constant {self.term.lexeme}\n"
                         file.write(indent + vm_code_stream)
-                        return vm_code_stream
-                    case jack_scanner.TokenType.IDENTIFIER:
+                    case jack_scanner.TokenType.IDENTIFIER | jack_scanner.TokenType.THIS:
+                        """
+                        If you're accessing a local variable then you're getting things from the local segment,
+                        but if you're accessing an identifier from the class level sybmol table then you need to
+                        get it from the 'this' location in memory
+                        """
+                        
                         # this is an identifier so it must be in my symbol table right - first check
                         # the subroutine level symbol table then the class level one
                         symbol = token.lexeme
-                        match subroutine_symbols.get(symbol, None) or class_symbols.get(
-                            symbol, None
-                        ):
+                        if symbol == "this":
+                            file.write(indent+ f"push pointer 0\n") # always this - pushing an object or poping an object?
+                            return
+                        is_valid_symbol = (class_symbols.get(symbol, None) or subroutine_symbols.get(symbol, None)) is not None
+                        is_class_level_symbol = class_symbols.get(symbol, None) is not None
+
+                        if not is_valid_symbol:
+                            raise Exception(f"{symbol} does not exist.")
+
+                        symbol_info = class_symbols.get(symbol, None) or subroutine_symbols.get(symbol, None)
+
+                        match symbol_info:
                             case VariableInfo(type_, kind, occurrences):
                                 # this will only work for really simple expressions right now
-                                file.write(indent + f"push {kind} {occurrences} \n")
+                                if is_class_level_symbol:
+                                    # file.write(f"{indent}push pointer 0\n")
+                                    file.write(indent + f"push this {occurrences}\n")
+                                else:
+                                    file.write(indent + f"push {kind} {occurrences}\n")
                             case _:
                                 # if symbol is None:
                                 raise Exception(f"{symbol} not defined")
@@ -659,7 +762,7 @@ class ExpressionList(XmlWriter, ASTEval):
 
     @property
     def num_expression(self):
-        return 1 + len(self.expression_list or [])
+        return (1 if self.expression else 0) + len(self.expression_list or [])
 
     def write_xml(self, file: typing.IO, indent: int = 0):
         with self.write_node(file, indent):
@@ -677,12 +780,21 @@ class ExpressionList(XmlWriter, ASTEval):
             for expr in self.expression_list or []:
                 expr[1].eval_node(file)
 
-    def write_eval(self, file: typing.IO):
-        return super().write_eval(file)
+#    def write_eval(self, file: typing.IO):
+#        return super().write_eval(file)
 
 
 @dataclasses.dataclass
 class SubroutineCall(AbstractExpression, XmlWriter, ASTEval):
+    """
+    calls like:
+        - do something();
+        - do Square.draw(); 
+    calls like the above can return a value or be void
+
+    the above is not true - in a do statement you can always just pop the value off because it will
+    never be used. But in a let statement it might be used.
+    """
     subroutine_name: jack_scanner.Token
     left_paren: jack_scanner.Token
     right_paren: jack_scanner.Token
@@ -702,18 +814,72 @@ class SubroutineCall(AbstractExpression, XmlWriter, ASTEval):
         self.write_token(self.right_paren, file, indent)
 
     def eval_node(self, file: typing.IO):
+        LOGGER.debug("eval:SubroutineCall")
         self.expression_list.eval_node(file)
         self.write_eval(file)
 
     def write_eval(self, file: typing.IO):
         indent = get_code_gen_indent() * " "
+        # this is the issue - I'm assuming there is always a subroutine source, but this is not the case - draw is a method
+        # so I can't just do `call draw x` it needs to be `Square.draw`, but how do I know if that 
+        # for now I can just put the class name, but I need to be able to distinguish 
         if (
             self.subroutine_source
-        ):  # assuming subroutine_source is a basically a className
+        ):  # assuming subroutine_source is a basically a className 
+
+            """
+            when you do a subroutine call what can it be
+
+            1. it can be a method call - in which case you are calling a method on the current object
+            2. it can be a function call - you are calling a function in some other object?
+            """
+
+            symbol = self.subroutine_source.lexeme
+            if symbol not in class_symbols and symbol not in subroutine_symbols:
+                LOGGER.warn(f"'{symbol}' does not exist. Assuming call to external class.")
+                file.writelines([
+                    indent
+                    + f"call {self.subroutine_source.lexeme}.{self.subroutine_name.lexeme} {self.expression_list.num_expression}\n"
+                ])
+                return 
+
+            is_class_level = class_symbols.get(self.subroutine_source.lexeme, None) is not None
+            var_info = None
+            if symbol in class_symbols:
+                var_info = class_symbols[self.subroutine_source.lexeme]
+            else:
+                var_info = subroutine_symbols[self.subroutine_source.lexeme]
+
+            if is_class_level:
+                file.write(f"{indent}push this {var_info.occurrence}\n")
+                file.writelines([
+                    indent
+                    + f"call {var_info.type_}.{self.subroutine_name.lexeme} {self.expression_list.num_expression + 1}\n"
+                ])
+                LOGGER.debug(f"wrote: push this {var_info.occurrence}\n") 
+                LOGGER.debug(f"wrote: call {var_info.type_}.{self.subroutine_name.lexeme} {self.expression_list.num_expression}")
+            else:
+                file.write(indent + f"push {var_info.kind} {var_info.occurrence}\n")
+
+                # always doing + 1 here, because this will exist for a method call - this has to be a method call - why?
+                # not 100% sure, but pretty sure these will always be method calls - you're calling a function on "something"
+                # also always pushing something on so yeah I think so
+                file.writelines([
+                    indent
+                    + f"call {var_info.type_}.{self.subroutine_name.lexeme} {self.expression_list.num_expression + 1}\n" 
+                ])
+                LOGGER.debug(f"wrote: call {var_info.type_}.{self.subroutine_name.lexeme} {self.expression_list.num_expression}")
+
+        else:
+            # this syntax is for methods only - although I don't see why you couldn't also use the above for
+            # method calls
+            file.write(f"{indent}push pointer 0\n")
+            # add + 1 to expression_list because this is always a method call
             file.writelines([
                 indent
-                + f"call {self.subroutine_source.lexeme}.{self.subroutine_name.lexeme} {self.expression_list.num_expression}\n"
+                + f"call {current_class_name}.{self.subroutine_name.lexeme} {self.expression_list.num_expression + 1} \n"
             ])
+        
 
 
 type StatementType = (
@@ -756,6 +922,13 @@ class ReturnStatement(XmlWriter, ASTEval):
 
     def write_eval(self, file: typing.IO):
         indent = get_code_gen_indent() * " "
+
+        if current_subroutine_name.variant == "constructor":
+            file.write(indent + "push pointer 0\n")
+            file.write(indent + "return\n")
+            return
+
+
         if self.expression:
             self.expression.eval_node(file)
         else:
@@ -777,7 +950,9 @@ class DoStatement(XmlWriter, ASTEval):
             self.write_token(self.semicolon, file, indent)
 
     def eval_node(self, file: typing.IO):
+        indent = get_code_gen_indent() * " "
         self.subroutine_call.eval_node(file)
+        file.write(indent + "pop temp 0\n")
 
     def write_eval(self, file: typing.IO):
         pass
@@ -814,12 +989,25 @@ class LetStatement(XmlWriter, ASTEval):
     def write_eval(self, file: typing.IO):
         indent = get_code_gen_indent()
         symbol = self.var_name.lexeme
-        var_info = subroutine_symbols.get(symbol, None)
+        var_info = None 
+        if symbol in class_symbols:
+            var_info = class_symbols.get(symbol, None)
+        elif symbol in subroutine_symbols:
+            LOGGER.info(f"{symbol} not in class level symbol table")
+            var_info = subroutine_symbols.get(symbol, None)
         if var_info is None:
-            raise Exception(f"{symbol} does not exist in subroutine level symbol table")
-        file.write(
-            f"{indent * " "}pop {var_info.kind} {var_info.occurrence}\n"
-        )  # pop top of stack and put it into segment[i]
+            LOGGER.debug(class_symbols)
+            LOGGER.debug(subroutine_symbols)
+            raise Exception(f"{symbol} does not exist in symbol tables")
+
+        if var_info.kind == "field":
+            file.write(
+                f"{indent * " "}pop this {var_info.occurrence}\n"
+            )  # pop top of stack and put it into segment[i]
+        else:
+            file.write(
+                f"{indent * " "}pop {var_info.kind} {var_info.occurrence}\n"
+            )  # pop top of stack and put it into segment[i]
 
 
 if_statement_instance = 0
@@ -863,8 +1051,8 @@ class IfStatement(XmlWriter, ASTEval):
         indent = get_code_gen_indent() * " "
         global if_statement_instance
         if_statement_instance += 3
-        L1 = f"L{if_statement_instance - 2}"
-        L2 = f"L{if_statement_instance - 1}"
+        L1 = f"LL{if_statement_instance - 2}"
+        L2 = f"LL{if_statement_instance - 1}"
 
         self.expression.eval_node(file)
         file.write(indent + "not\n")
@@ -909,12 +1097,16 @@ class WhileStatement(XmlWriter, ASTEval):
 
         global while_loop_instance
         while_loop_instance += 1
+        current_while_loop_instance = while_loop_instance 
+        LOGGER.debug(f"while loop instance: {while_loop_instance}")
+        
+
         # evaluate the expression. It's now on top of the stack
         # while_loop_instance = f"WHILE_LOOP"
-        file.write(indent + f"label WHILE_LOOP{while_loop_instance}\n")
+        file.write(indent + f"label WHILE_LOOP{current_while_loop_instance}\n")
         self.expression.eval_node(file)
         file.write(indent + "not\n")
-        file.write(indent + f"if-goto WHILE_LOOP{while_loop_instance}Complete\n")
+        file.write(indent + f"if-goto WHILE_LOOP{current_while_loop_instance}Complete\n")
         self.statements.eval_node(file)
-        file.write(indent + f"goto WHILE_LOOP{while_loop_instance}\n")
-        file.write(indent + f"label WHILE_LOOP{while_loop_instance}Complete\n")
+        file.write(indent + f"goto WHILE_LOOP{current_while_loop_instance}\n")
+        file.write(indent + f"label WHILE_LOOP{current_while_loop_instance}Complete\n")

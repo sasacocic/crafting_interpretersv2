@@ -44,20 +44,6 @@ class Parser:
         return top.token_type if top else None
 
     def parse(self):
-        """
-        TODO: need to change this. I'm basically using this as the entry point into to reset the symbol
-        tables. There's definitely a more buttoned up way to do this than this.
-        """
-        py_jack.ast_nodes.class_occurrences = {
-            "field": 0,
-            "static": 0,
-            "local": 0,
-            "argument": 0,
-            # there are more of these just not really sure about them
-        }
-        py_jack.ast_nodes.class_symbols = {}
-        py_jack.ast_nodes.current_class_name = None
-        py_jack.ast_nodes.current_subroutine_name = None
         return self.parse_class()
 
     def parse_class(self) -> py_jack.ast_nodes.ClassNode:

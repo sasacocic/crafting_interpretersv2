@@ -19,8 +19,8 @@ logging.config.dictConfig({
     },
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
     "loggers": {
-        "py_jack.jack_scanner": {"level": logging.INFO},
-        "py_jack.jack_parser": {"level": LOG_LEVEL or logging.INFO},
+#        "py_jack.jack_scanner": {"level": logging.INFO},
+#        "py_jack.jack_parser": {"level": LOG_LEVEL or logging.INFO},
         "py_jack.ast_nodes": {"level": LOG_LEVEL or logging.INFO},
     },
     "root": {"handlers": ["console"], "level": LOG_LEVEL or logging.INFO},
@@ -89,6 +89,7 @@ def get_jack_files_in_path(path: pl.Path) -> list[pl.Path]:
                 files.append(path / jack_file)
         else:
             files.append(path)
+        files.sort()
         return files
     else:
         raise FileNotFoundError(f"{path.resolve().name} not found")
